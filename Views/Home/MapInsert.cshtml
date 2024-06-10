@@ -1,0 +1,130 @@
+﻿@{
+    ViewData["Title"] = "Map Insert";
+}
+<style>
+    .geocoder-dropdown-item {
+        padding: 5px;
+    }
+
+    .geocoder-dropdown-icon {
+        margin-right: 10px;
+    }
+
+    .geocoder-dropdown-text {
+        color: #5a3fc0;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: larger;
+    }
+
+</style>
+<h2>@ViewData["Title"]</h2>
+
+
+<div id="map" style="width: 100%; height: 500px;"></div>
+
+    <script>
+        mapboxgl.accessToken = 'pk.eyJ1IjoibWVzYmF1bGhhc2FuIiwiYSI6ImNsd3pjMGc5cjA1bHIyanFwOGlib3JtNmMifQ.BYcuMdFSAA3bjnTVN9LGEw';
+        const map = new mapboxgl.Map({
+            container: 'map',
+            // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
+            style: 'mapbox://styles/mapbox/streets-v12',
+            // center: [-77.04, 38.907],
+            zoom: 11.15
+        });
+
+        if (navigator.geolocation) {
+            navigator.geolocation.getCurrentPosition(function (position) {
+                var latitude = position.coords.latitude;
+                var longitude = position.coords.longitude;
+
+                // Update map center
+                map.setCenter([longitude, latitude]);
+
+                new mapboxgl.Marker()
+                    .setLngLat([longitude, latitude])
+                    .addTo(map);
+                let coordinates = {
+                    lng: longitude,
+                    lat: latitude
+                };
+                // getLocationDetails(coordinates);
+            });
+        } else {
+            alert('Geolocation is not supported by your browser.');
+        }
+
+        // Add click event listener to the map
+        map.on('click', async (e) => {
+            ForwardApi();
+            const { lng, lat } = e.lngLat;
+        // const datasetId = 'clx6fuely1ufa1nn6r9nzqmxm';
+
+        //     try {
+        //         // Replace 'response' with your search API response structure
+        //         const response = {
+        //             feature_name: 'Dhaka',
+        //             description: 'this is Dhaka',
+        //             // Add other properties here based on your search API response structure
+        //         };
+
+        //         const properties = {
+        //             // Add all properties from the response structure here
+        //             feature_name: response.feature_name,
+        //             description: response.description,
+        //             // Add other properties here based on your search API response structure
+        //         };
+
+        //     const requestBody = {
+        //         type: "Feature",
+        //         geometry: {
+        //             type: "Point",
+        //             coordinates: [lng, lat]
+        //         },
+        //         properties: {}
+        //     };
+        //     let token = 'tk.eyJ1IjoibWVzYmF1bGhhc2FuIiwiZXhwIjoxNzE3OTIyNDA2LCJpYXQiOjE3MTc5MTg4MDUsInNjb3BlcyI6WyJlc3NlbnRpYWxzIiwic2NvcGVzOmxpc3QiLCJtYXA6cmVhZCIsIm1hcDp3cml0ZSIsInVzZXI6cmVhZCIsInVzZXI6d3JpdGUiLCJ1cGxvYWRzOnJlYWQiLCJ1cGxvYWRzOmxpc3QiLCJ1cGxvYWRzOndyaXRlIiwic3R5bGVzOnRpbGVzIiwic3R5bGVzOnJlYWQiLCJmb250czpsaXN0IiwiZm9udHM6cmVhZCIsImZvbnRzOndyaXRlIiwic3R5bGVzOndyaXRlIiwic3R5bGVzOmxpc3QiLCJzdHlsZXM6ZG93bmxvYWQiLCJzdHlsZXM6cHJvdGVjdCIsInRva2VuczpyZWFkIiwidG9rZW5zOndyaXRlIiwiZGF0YXNldHM6bGlzdCIsImRhdGFzZXRzOnJlYWQiLCJkYXRhc2V0czp3cml0ZSIsInRpbGVzZXRzOmxpc3QiLCJ0aWxlc2V0czpyZWFkIiwidGlsZXNldHM6d3JpdGUiLCJkb3dubG9hZHM6cmVhZCIsInZpc2lvbjpyZWFkIiwidmlzaW9uOmRvd25sb2FkIiwibmF2aWdhdGlvbjpkb3dubG9hZCIsIm9mZmxpbmU6cmVhZCIsIm9mZmxpbmU6d3JpdGUiLCJzdHlsZXM6ZHJhZnQiLCJmb250czptZXRhZGF0YSIsInNwcml0ZS1pbWFnZXM6cmVhZCIsImRhdGFzZXRzOnN0dWRpbyIsImN1c3RvbWVyczp3cml0ZSIsImNyZWRlbnRpYWxzOnJlYWQiLCJjcmVkZW50aWFsczp3cml0ZSIsImFuYWx5dGljczpyZWFkIl0sImNsaWVudCI6Im1hcGJveC5jb20iLCJsbCI6MTcxNzQ0MDk3MTk0MiwiaXUiOm51bGwsImVtYWlsIjoibWVzYmF1bGhhc2FuYnNtcnN0dUBnbWFpbC5jb20ifQ.6HoObBZrvqOJq7aPS6wnQA';
+         
+        //     const url = `https://api.mapbox.com/datasets/v1/mesbaulhasan/${datasetId}/features?access_token=${token}`;
+        //         const postOptions = {
+        //             method: 'POST',
+        //             headers: {
+        //                 'Content-Type': 'application/json'
+        //             },
+        //             body: JSON.stringify(requestBody)
+        //         };
+
+        //         const postResponse = await fetch(url, postOptions);
+
+        //         if (!postResponse.ok) {
+        //             throw new Error('Failed to add data to dataset');
+        //         }
+
+        //         console.log('Location data saved successfully');
+        //     } catch (error) {
+        //         console.error('Error saving location data:', error);
+        //     }
+        });
+
+    function ForwardApi() {
+        const query = 'Shahjalal International Airport, New Airport Rd., Dhaka, Dhaka, Bangladesh';
+        const accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN';
+
+        fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxgl.accessToken}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Error ${response.status}: ${response.statusText}`);
+                }
+                let detailsdata = response.json();
+                console.log("forward data:", detailsdata)
+                // return response.json();
+            })
+            .then(data => {
+                console.log('Geocoding Data:', data);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+    }
+    </script>
+
+

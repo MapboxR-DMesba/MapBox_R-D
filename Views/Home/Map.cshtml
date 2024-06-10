@@ -1,0 +1,432 @@
+﻿
+@{
+    ViewData["Title"] = "Map";
+}
+<style>
+    .geocoder-dropdown-item {
+        padding: 5px;
+    }
+
+    .geocoder-dropdown-icon {
+        margin-right: 10px;
+    }
+
+    .geocoder-dropdown-text {
+        color: #5a3fc0;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: larger;
+    }
+
+</style>
+<h2>@ViewData["Title"]</h2>
+<div class="raw">
+    <div class="col-md-4" style="ml-2">
+        <form id="searchForm">
+           
+            <input type="text" id="placeCode" name="placeCode" placeholder="Enter place Code">
+
+            <button type="submit">Search</button>
+        </form>
+
+    </div>
+    <div class="col-md-4" style="ml-2">
+        
+        <div id="result"></div>
+    </div>
+</div>
+
+
+
+<div id="map" style="width: 100%; height: 500px;"></div>
+
+
+  
+            <script>
+    
+    mapboxgl.accessToken = `pk.eyJ1IjoibWVzYmF1bGhhc2FuIiwiYSI6ImNsd3pjMGc5cjA1bHIyanFwOGlib3JtNmMifQ.BYcuMdFSAA3bjnTVN9LGEw`;
+        // var map = new mapboxgl.Map({
+        //     container: 'map',
+        //     style: 'mapbox://styles/mapbox/streets-v11'
+        // });
+
+    const map = new mapboxgl.Map({
+        container: 'map',
+
+        // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
+        style: 'mapbox://styles/mapbox/streets-v12',
+        // center: [-77.04, 38.907],
+        zoom: 11.15
+    });
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function (position) {
+            var latitude = position.coords.latitude;
+            var longitude = position.coords.longitude;
+
+            // Update map center
+            map.setCenter([longitude, latitude]);
+
+            new mapboxgl.Marker()
+                .setLngLat([longitude, latitude])
+                .addTo(map);
+            let coordinates = {
+                lng : longitude,
+                lat : latitude
+            };
+           // getLocationDetails(coordinates);
+        });
+    } else {
+        alert('Geolocation is not supported by your browser.');
+    }
+ 
+    const geocoder = new MapboxGeocoder({
+        accessToken: mapboxgl.accessToken,
+        types: 'poi',
+        // see https://docs.mapbox.com/api/search/#geocoding-response-object for information about the schema of each response feature
+        render: function (item) {
+            // extract the item's maki icon or use a default
+            const maki = item.properties.maki || 'marker';
+            return `<div class='geocoder-dropdown-item'>
+                        
+                        <span class='geocoder-dropdown-text'>
+                        ${item.text}
+                        </span>
+                    </div>`;
+        },
+        mapboxgl: mapboxgl
+    });
+    map.addControl(geocoder);
+
+
+    // Add a click event listener
+    map.on('click', function (e) {
+
+       
+        //Get the coordinates where the user clicked
+      //  var coordinates = e.lngLat;
+        //Display coordinates in the search form
+
+        //take location details and save to db
+       
+        // Make an AJAX request with the clicked location's coordinates
+        var coordinates = e.lngLat;
+       getAreaData(coordinates.lng, coordinates.lat);
+        //getAreaDatademo(coordinates.lng, coordinates.lat);
+
+        // getLocationDetails(coordinates);
+    
+
+        // // Optionally, add a marker at the click location
+        // new mapboxgl.Marker()
+        //     .setLngLat([coordinates.lng, coordinates.lat])
+        //     .addTo(map);
+    });
+
+    document.getElementById('searchForm').addEventListener('submit', function (e) {
+        e.preventDefault(); // Prevent form submission
+        var placeId = document.getElementById('placeCode').value;
+        $.ajax({
+            url: '/Home/GetLocationByPlaceId?placeId=' + placeId,
+            type: 'GET',
+            success: function (response) {
+                // Handle success response
+                // Fetch boundary details
+                // getBoundaryDetails(coordinates);
+                if (response.message == "not found") {
+                 
+                    document.getElementById('result').innerHTML = `<h3>invalid place code</h3></p>`;
+                } else {
+                    let longitude = parseFloat(response.locationDetails.lng);
+                    let latitude = parseFloat(response.locationDetails.lat);
+                
+                    map.setCenter([longitude, latitude]);
+
+                    new mapboxgl.Marker()
+                        .setLngLat([longitude, latitude])
+                        .addTo(map);
+
+                    var addressDetails = `
+                                        <strong>Place Name:</strong> ${response.locationDetails.placeName}<br>
+                                            <strong>Address:</strong> ${response.locationDetails.addresses || ''}<br>
+                                        <strong>Street:</strong> ${response.locationDetails.street || ''}<br>
+                                        <strong>Neighborhood:</strong> ${response.locationDetails.neighborhood || ''}<br>
+                                        <strong>Locality:</strong> ${response.locationDetails.locality || ''}<br>
+                                        <strong>Region:</strong> ${response.locationDetails.region || ''}<br>
+                                        <strong>Country:</strong> ${response.locationDetails.country || ''}`;
+                    document.getElementById('result').innerHTML = `<h3>Location Details:</h3><p>${addressDetails}</p>`;
+                }
+                    
+            },
+            error: function (xhr, status, error) {
+                // Handle error response
+                console.error('Error: ' + error);
+            }
+        });
+        // Update map center
+       
+    });
+    function getLocationDetails(coordinates) {
+        $.ajax({
+            url: `https://api.mapbox.com/geocoding/v5/mapbox.places/${coordinates.lng},${coordinates.lat}.json?access_token=${mapboxgl.accessToken}`,
+            type: 'GET',
+            success: function (data) {
+                if (data && data.features && data.features.length > 0) {
+                    var place = data.features[0];
+                    var details = {
+                        placeName: place.place_name,
+                        text: place.text,
+                        address: place.address || '',
+                        context: {}
+                    };
+
+                    place.context.forEach(function (ctx) {
+                        var id = ctx.id.split('.')[0];
+                        details.context[id] = ctx.text;
+                    });
+
+                    var addressDetails = `
+                            <strong>Place Name:</strong> ${details.placeName}<br>
+                            <strong>Address:</strong> ${details.address}<br>
+                            <strong>Street:</strong> ${details.context.street || ''}<br>
+                            <strong>Neighborhood:</strong> ${details.context.neighborhood || ''}<br>
+                            <strong>Locality:</strong> ${details.context.place || ''}<br>
+                            <strong>Region:</strong> ${details.context.region || ''}<br>
+                            <strong>Country:</strong> ${details.context.country || ''}
+                        `;
+                    document.getElementById('placeCode').value = place.id;
+                        document.getElementById('result').innerHTML = `<h3>Location Details:</h3><p>${addressDetails}</p>`;
+                    $.ajax({
+                        url: '@Url.Action("HandleMapClick", "Home")',
+                        type: 'POST',
+                        //contentType: 'application/json',
+                        data: {
+                            Longitude: coordinates.lng,
+                            Latitude: coordinates.lat,
+                            PlaceName: details.placeName,
+                            Addresses: details.address,
+                            Street: details.context.street || '',
+                            Neighborhood: details.context.neighborhood || '',
+                            Locality: details.context.place || '',
+                            Region: details.context.region || '',
+                            Country: details.context.country || '',
+                            PlaceId: place.id
+                        },
+                        success: function (response) {
+                            // Handle success response
+                            // Fetch boundary details
+                           // getBoundaryDetails(coordinates);
+                        },
+                        error: function (xhr, status, error) {
+                            // Handle error response
+                            console.error('Error: ' + error);
+                        }
+                    });
+
+                } else {
+                    document.getElementById('result').innerHTML = 'No location details found.';
+                }
+            },
+            error: function (xhr, status, error) {
+                console.error('Error: ' + error);
+            }
+        });
+    }
+
+    function getBoundaryDetails(coordinates) {
+        
+        $.ajax({
+            url: `https://api.mapbox.com/v4/mapbox.enterprise-boundaries-a0-v2/tilequery/${coordinates.lng},${coordinates.lat}.json?access_token= ${mapboxgl.accessToken}`,
+            type: 'GET',
+            success: function (data) {
+                if (data && data.features && data.features.length > 0) {
+                    var boundary = data.features[0];
+                    // Add boundary to the map
+                    map.addSource('boundary', {
+                        'type': 'geojson',
+                        'data': boundary
+                    });
+                    map.addLayer({
+                        'id': 'boundary',
+                        'type': 'line',
+                        'source': 'boundary',
+                        'layout': {},
+                        'paint': {
+                            'line-color': '#888',
+                            'line-width': 2
+                        }
+                    });
+                } else {
+                    document.getElementById('result').innerHTML += '<p>No boundary details found.</p>';
+                }
+            },
+            error: function (xhr, status, error) {
+                console.error('Error: ' + error);
+            }
+        });
+    }
+
+
+    /// customization
+    function getAreaDatademo(longitude, latitude) {
+        // var url = `http://localhost:5259/api/proxy/reverse/${longitude},${latitude}`;  // Proxy server URL
+        // fetch(url)
+        //     .then(response => response.json())
+        //     .then(data => {
+        //         console.log("locationData:", data)
+        //         if (data.features && data.features.length > 0) {
+        //             var feature = data.features[0];
+        //             var coords = feature.geometry.coordinates;
+        //             updateMap(coords, feature);
+        //         } else {
+        //             alert('No data found for the clicked location.');
+        //         }
+        //     })
+        //     .catch(error => console.error('Error fetching data:', error));
+        $.ajax({
+            url: `https://api.mapbox.com/geocoding/v5/mapbox.places/${longitude},${latitude}.json?access_token=${mapboxgl.accessToken}`,
+            type: 'GET',
+            success: function (data) {
+                console.log("locationData:", data)
+                if (data.features && data.features.length > 0) {
+                    //var place = data.features[0];
+                    var placeDetails = data.features.filter(feature => {
+                        return feature.place_type.includes('locality');
+                    });
+
+                    console.log("location place:", placeDetails);
+                    var place = placeDetails[0];
+                    var details = {
+                        placeName: place.place_name,
+                        text: place.text,
+                        address: place.address || '',
+                        context: {}
+                    };
+
+                    place.context.forEach(function (ctx) {
+                        var id = ctx.id.split('.')[0];
+                        details.context[id] = ctx.text;
+                    });
+
+                    var addressDetails = `
+                                <strong>Place Name:</strong> ${details.placeName}<br>
+                                <strong>Address:</strong> ${details.address}<br>
+                                <strong>Street:</strong> ${details.context.street || ''}<br>
+                                <strong>Neighborhood:</strong> ${details.context.neighborhood || ''}<br>
+                                <strong>Locality:</strong> ${details.context.place || ''}<br>
+                                <strong>Region:</strong> ${details.context.region || ''}<br>
+                                <strong>Country:</strong> ${details.context.country || ''}
+                            `;
+                    document.getElementById('placeCode').value = place.id;
+                    document.getElementById('result').innerHTML = `<h3>Location Details:</h3><p>${addressDetails}</p>`;
+                    // var feature = data.features[0];
+                    // var coords = feature.geometry.coordinates;
+                  
+                    var coords = place.geometry.coordinates;
+
+                    updateMap(coords, place);
+                    updateMap(data.query, place);
+                } else {
+                    alert('No data found for the clicked location.');
+                }
+            },
+            error: function (xhr, status, error) {
+                console.error('Error: ' + error);
+            }
+        });
+    }
+    function getAreaData(longitude, latitude) {
+        var url = `http://localhost:5259/api/proxy/reverse/${longitude},${latitude}`;  // Proxy server URL
+        fetch(url)
+            .then(response => response.json())
+            .then(data => {
+                console.log("locationData:", data)
+                if (data.features && data.features.length > 0) {
+                    var feature = data.features[0];
+                    var coords = feature.geometry.coordinates;
+                    updateMap(coords, feature);
+                } else {
+                    alert('No data found for the clicked location.');
+                }
+            })
+            .catch(error => console.error('Error fetching data:', error));
+    }
+    function updateMap(coordinates, feature) {
+
+        //show details
+
+        // Remove existing marker and area layer if they exist
+        if (map.getLayer('area')) {
+            map.removeLayer('area');
+            map.removeSource('area');
+        }
+        if (window.currentMarker) {
+            window.currentMarker.remove();
+        }
+
+        // Add new marker
+        window.currentMarker = new mapboxgl.Marker()
+            .setLngLat(coordinates)
+            .addTo(map);
+
+      
+       
+
+        
+        // Add new area layer
+        map.addLayer({
+            'id': 'area',
+            'type': 'fill',
+            'source': {
+                'type': 'geojson',
+                'data': {
+                    'type': 'Feature',
+                    'geometry': {
+                        'type': 'Polygon',
+                        'coordinates': [[
+                            [coordinates[0] - 0.001, coordinates[1] - 0.001],
+                            [coordinates[0] - 0.001, coordinates[1] + 0.001],
+                            [coordinates[0] + 0.001, coordinates[1] + 0.001],
+                            [coordinates[0] + 0.001, coordinates[1] - 0.001],
+                            [coordinates[0] - 0.001, coordinates[1] - 0.001]
+                        ]]
+                       
+                    }
+                }
+            },
+            'layout': {},
+            'paint': {
+                'fill-color': '#088',
+                'fill-opacity': 0.8
+            }
+        });
+
+        // Center the map on the new coordinates
+        map.flyTo({
+            center: coordinates,
+            essential: true,
+            zoom: 15
+        });
+    }
+
+                function ForwardApi() {
+        const query = '1600 Pennsylvania Ave NW, Washington, DC';
+        const accessToken = 'YOUR_MAPBOX_ACCESS_TOKEN';
+
+        fetch(`https://api.mapbox.com/geocoding/v5/mapbox.places/${encodeURIComponent(query)}.json?access_token=${mapboxgl.accessToken}`)
+            .then(response => {
+                if (!response.ok) {
+                    throw new Error(`Error ${response.status}: ${response.statusText}`);
+                }
+                let detailsdata = response.json();
+                console.log("forward data:", detailsdata)
+               // return response.json();
+            })
+            .then(data => {
+                console.log('Geocoding Data:', data);
+            })
+            .catch(error => {
+                console.error('Error:', error);
+            });
+                }
+    </script>
+
