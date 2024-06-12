@@ -1,4 +1,4 @@
-﻿using GoogleMap.Models;
+﻿using GoogleMap.DBModels;
 using Microsoft.EntityFrameworkCore;
 
 namespace GoogleMap.Data
@@ -10,6 +10,9 @@ namespace GoogleMap.Data
                 
         }
       
-        public DbSet<Location> Location { get; set; }
+    
+        public DbSet<PolygonCenter> PolygonCenters { get; set; }
+        public DbSet<PolygonPoint> PolygonPoints { get; set; }
+        public DbSet<Location> Locations { get; set; }
     }
 }

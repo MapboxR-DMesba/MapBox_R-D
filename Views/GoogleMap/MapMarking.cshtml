@@ -1,0 +1,327 @@
+﻿<!DOCTYPE html>
+<style>
+    body, html {
+        height: 100%;
+        margin: 0;
+        display: flex;
+        flex-direction: column;
+    }
+
+    #container {
+        display: flex;
+        flex-direction: column;
+        width: 100%;
+        height: 100%;
+    }
+    #googleMap {
+        flex-grow: 1;
+        height: 100%;
+    }
+
+    #controls {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 10px;
+        width: 100%;
+        background-color: #f8f9fa;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        z-index: 1;
+    }
+
+    button {
+        margin: 0 10px;
+        padding: 10px 20px;
+        border: none;
+        background-color: #007bff;
+        color: white;
+        cursor: pointer;
+    }
+
+        button:disabled {
+            background-color: #6c757d;
+        }
+
+    .form-group {
+        margin: 0 10px;
+        width: 200px;
+    }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+</style>
+<html>
+  
+<body>
+
+    <h1>My First Google Map</h1>
+    <div id="container">
+    <div id="controls">
+ 
+        <div id="form" style="display:none;">
+            <div class="form-group">
+                <label for="formattedAddress">Formatted Address</label>
+                <input type="text" id="formattedAddress" readonly>
+            </div>
+            <div class="form-group">
+                <label for="userInput">User Input</label>
+                <input type="text" id="userInput">
+            </div>
+               
+        </div>
+            <button id="confirmBtn">Confirm</button>
+            <button id="saveBtn" style="display:none;" >Save</button>
+            <button id="resetBtn" style="display:none;" >Reset</button>
+    </div>
+    <div id="googleMap" style="width:100%;height:600px;"></div>
+</div>
+
+    <script>
+        let map;
+        let markers = [];
+        let clickedPoints = [];
+        let polygon;
+        let centerMarker;
+        let centerPoint;
+        let geocoder;
+        function myMap() {
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function (position) {
+                    var userLocation = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
+
+                    var mapProp = {
+                        center: userLocation,
+                        zoom: 15, // Adjust zoom level as needed
+                    };
+                    map = new google.maps.Map(document.getElementById("googleMap"), mapProp);
+                    geocoder = new google.maps.Geocoder();
+                    // Add a click event listener to the map
+                    google.maps.event.addListener(map, 'click', function (event) {
+                        var clickedLocation = event.latLng;
+                        
+                        placeMarker(clickedLocation);
+                    });
+                    document.getElementById('confirmBtn').addEventListener('click', confirmPolygon);
+                 document.getElementById('saveBtn').addEventListener('click', saveData);
+                    document.getElementById('resetBtn').addEventListener('click', resetMap);
+                }, function () {
+                    handleLocationError(true);
+                });
+            } else {
+                // Browser doesn't support Geolocation
+                handleLocationError(false);
+            }
+        }
+
+        function placeMarker(location) {
+            var marker = new google.maps.Marker({
+                position: location,
+                map: map
+            });
+            markers.push(marker);
+            clickedPoints.push(location);
+        }
+        function confirmPolygon() {
+            if (clickedPoints.length < 3) {
+                alert('Please select at least 3 points.');
+                return;
+            }
+
+            if (polygon) {
+                polygon.setMap(null);
+            }
+
+            if (centerMarker) {
+                centerMarker.setMap(null);
+            }
+
+            drawPolygon();
+            centerPoint = calculateCenter();
+            displayAddress(centerPoint);
+            document.getElementById('saveBtn').style.display = 'block';
+            document.getElementById('resetBtn').style.display = 'block';
+            document.getElementById('form').style.display = 'block';
+
+            // Disable map click event
+            google.maps.event.clearListeners(map, 'click');
+        }
+        function displayAddress(center) {
+            geocoder.geocode({ 'location': center }, function (results, status) {
+                if (status === 'OK') {
+                    if (results[0]) {
+                        document.getElementById('formattedAddress').value = results[0].formatted_address;
+                    } else {
+                        document.getElementById('formattedAddress').value = 'No results found';
+                    }
+                } else {
+                    document.getElementById('formattedAddress').value = 'Geocoder failed: ' + status;
+                }
+            });
+        }
+        function displayRectangle() {
+            var bounds = new google.maps.LatLngBounds();
+            markers.forEach(function (marker) {
+                bounds.extend(marker.getPosition());
+            });
+            var rectangle = new google.maps.Rectangle({
+                bounds: bounds,
+                editable: true,
+                draggable: true,
+                map: map
+            });
+        }
+        function drawPolygon() {
+            // Create a new polygon with the clicked points
+            const sortedPoints = getConvexHull(clickedPoints);
+
+            polygon = new google.maps.Polygon({
+                paths: sortedPoints,
+                fillColor: '#FF0000',
+                fillOpacity: 0.5,
+                strokeWeight: 0,
+                map: map
+            });
+            // Calculate and display the area of the polygon
+            // var area = google.maps.geometry.spherical.computeArea(polygon.getPath());
+            // console.log("Area of the polygon: " + area.toFixed(2) + " square meters");
+
+            // Clear the clicked points array for next use
+           // clickedPoints = [];
+        }
+        function getConvexHull(points) {
+            points.sort((a, b) => a.lng() - b.lng() || a.lat() - b.lat());
+
+            const cross = (o, a, b) => (a.lat() - o.lat()) * (b.lng() - o.lng()) - (a.lng() - o.lng()) * (b.lat() - o.lat());
+
+            let lower = [];
+            for (let point of points) {
+                while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) {
+                    lower.pop();
+                }
+                lower.push(point);
+            }
+
+            let upper = [];
+            for (let point of points.reverse()) {
+                while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) {
+                    upper.pop();
+                }
+                upper.push(point);
+            }
+
+            upper.pop();
+            lower.pop();
+            return lower.concat(upper);
+        }
+
+        function calculateCenter() {
+            let latSum = 0;
+            let lngSum = 0;
+
+            clickedPoints.forEach(point => {
+                latSum += point.lat();
+                lngSum += point.lng();
+            });
+
+            const centerLat = latSum / clickedPoints.length;
+            const centerLng = lngSum / clickedPoints.length;
+
+            const center = new google.maps.LatLng(centerLat, centerLng);
+
+            centerMarker = new google.maps.Marker({
+                position: center,
+                map: map,
+                icon: {
+                    url: "http://maps.google.com/mapfiles/ms/icons/blue-dot.png"
+                }
+            });
+
+            map.setCenter(center);
+            return { lat: centerLat, lng: centerLng };
+        }
+
+        function handleLocationError(browserHasGeolocation) {
+            var errorMsg = browserHasGeolocation ?
+                "Error: The Geolocation service failed." :
+                "Error: Your browser doesn't support geolocation.";
+            document.getElementById('locationDetails').innerHTML = errorMsg;
+        }
+        function saveData() {
+            const userInput = document.getElementById('userInput').value;
+            const formattedAddress = document.getElementById('formattedAddress').value;
+            const polygondata = {
+                Center: { Lat: centerPoint.lat, Lng: centerPoint.lng },
+                Points: clickedPoints.map(point => ({ Lat: point.lat, Lng: point.lng })),
+                UserInput: userInput,
+                FormattedAddress: formattedAddress
+            };
+            $.ajax({
+                url: '@Url.Action("SavePolygon", "GoogleMap")',
+                type: 'POST',
+               // contentType: 'application/json',
+                data: polygondata,
+                success: function (response) {
+                    resetMap();
+                },
+                error: function (xhr, status, error) {
+                    // Handle error response
+                    console.error('Error: ' + error);
+                }
+            });
+            // fetch('https://localhost:5001/api/polygons', {
+            //     method: 'POST',
+            //     headers: {
+            //         'Content-Type': 'application/json'
+            //     },
+            //     body: JSON.stringify(data)
+            // })
+            //     .then(response => response.json())
+            //     .then(data => {
+            //         console.log('Success:', data);
+            //         resetMap();
+            //     })
+            //     .catch((error) => {
+            //         console.error('Error:', error);
+            //     });
+        }
+
+        function resetMap() {
+            if (polygon) {
+                polygon.setMap(null);
+                polygon = null;
+            }
+
+            if (centerMarker) {
+                centerMarker.setMap(null);
+                centerMarker = null;
+            }
+
+            markers.forEach(marker => marker.setMap(null));
+            markers = [];
+            clickedPoints = [];
+            centerPoint = null;
+
+            document.getElementById('saveBtn').style.display = 'none';
+            document.getElementById('resetBtn').style.display = 'none';
+            document.getElementById('form').style.display = 'none';
+
+            // Re-enable map click event
+            map.addListener('click', (event) => {
+                placeMarker(event.latLng);
+            });
+        }
+    </script>
+
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbwLbPr5g35t-qKXhysIw2V9WUQBYae18&callback=myMap"></script>
+
+</body>
+</html>

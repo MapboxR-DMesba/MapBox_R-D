@@ -1,0 +1,141 @@
+﻿<!DOCTYPE html>
+<html>
+<body>
+
+    <h1>My First Google Map</h1>
+
+    <div id="googleMap" style="width:100%;height:400px;"></div>
+    <div id="locationDetails" style="margin-top:20px;"></div>
+
+    <script>
+        var map;
+        var marker;
+        function myMap() {
+            // Use HTML5 Geolocation API to get the user's current position
+            if (navigator.geolocation) {
+                navigator.geolocation.getCurrentPosition(function (position) {
+                    var userLocation = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
+
+                    var mapProp = {
+                        center: userLocation,
+                        zoom: 10, // Adjust zoom level as needed
+                    };
+                    map = new google.maps.Map(document.getElementById("googleMap"), mapProp);
+
+                    // Add a marker at the user's current location
+                    marker = new google.maps.Marker({
+                        position: userLocation,
+                        map: map,
+                        title: "You are here"
+                    });
+
+                    // Add a click event listener to the map
+                    google.maps.event.addListener(map, 'click', function (event) {
+                        var clickedLocation = event.latLng;
+                        placeMarker(clickedLocation);
+                        displayLocationDetails(clickedLocation);
+                        markArea(clickedLocation);
+                    });
+
+                    // Display details of the user's current location
+                    displayLocationDetails(userLocation);
+                }, function () {
+                    handleLocationError(true);
+                });
+            } else {
+                // Browser doesn't support Geolocation
+                handleLocationError(false);
+            }
+        }
+        function placeMarker(location) {
+            // Remove existing marker if any
+            if (marker) {
+                marker.setMap(null);
+            }
+            marker = new google.maps.Marker({
+                position: location,
+                map: map
+            });
+        }
+        function displayLocationDetails(location) {
+            var geocoder = new google.maps.Geocoder();
+
+            geocoder.geocode({ 'location': location }, function (results, status) {
+                if (status === 'OK') {
+                    if (results.length > 0) {
+                        // Calculate distances between each result's location and the target location
+                        var address = results.filter((x) => { return x.types.includes("premise"); })
+                        console.log("promiss address:", JSON.stringify(address))
+                        var details = results.map((result, index) => {
+                            var formattedAddress = result.formatted_address;
+                           // console.log("place: " + index + 1 + "" + JSON.stringify(result))
+                            var types = result.types.join(', ');
+                            return `<p><strong>Result ${index + 1}:</strong><br> <strong>Formatted Address:</strong> ${formattedAddress}<br> <strong>Types:</strong> ${types}</p>`;
+                        }).join('');
+
+                        document.getElementById('locationDetails').innerHTML = details;
+                    } else {
+                        document.getElementById('locationDetails').innerHTML = 'No results found';
+                    }
+                } else {
+                    document.getElementById('locationDetails').innerHTML = 'Geocoder failed due to: ' + status;
+                }
+            });
+        }
+        function highlightBuilding(location) {
+            map.data.forEach(function (feature) {
+                var geometry = feature.getGeometry();
+                if (geometry.getType() === 'Polygon') {
+                    geometry.getArray().forEach(function (path) {
+                        path.getArray().forEach(function (latlng) {
+                            if (google.maps.geometry.poly.containsLocation(location, new google.maps.Polygon({ paths: path.getArray() }))) {
+                                if (clickedFeature) {
+                                    map.data.overrideStyle(clickedFeature, { fillColor: 'gray' });
+                                }
+                                clickedFeature = feature;
+                                map.data.overrideStyle(feature, { fillColor: 'yellow' });
+                            }
+                        });
+                    });
+                }
+            });
+        }
+        function markArea(location) {
+            var circle = new google.maps.Circle({
+                strokeColor: '#FF0000',
+                strokeOpacity: 0.8,
+                strokeWeight: 2,
+                fillColor: '#FF0000',
+                fillOpacity: 0.35,
+                map: map,
+                center: location,
+                radius: 10000 // Adjust the radius of the circle as needed
+            });
+        }
+        function handleLocationError(browserHasGeolocation) {
+            var errorMsg = browserHasGeolocation ?
+                "Error: The Geolocation service failed." :
+                "Error: Your browser doesn't support geolocation.";
+            document.getElementById('locationDetails').innerHTML = errorMsg;
+        }
+
+        function haversineDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371e3; // Earth radius in meters
+            const φ1 = lat1 * Math.PI / 180; // Latitude of the first point in radians
+            const φ2 = lat2 * Math.PI / 180; // Latitude of the second point in radians
+            const Δφ = (lat2 - lat1) * Math.PI / 180; // Difference in latitude in radians
+            const Δλ = (lon2 - lon1) * Math.PI / 180; // Difference in longitude in radians
+
+            const a = Math.sin(Δφ / 2) * Math.sin(Δφ / 2) +
+                Math.cos(φ1) * Math.cos(φ2) *
+                Math.sin(Δλ / 2) * Math.sin(Δλ / 2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+            return R * c; // Distance in meters
+        }
+    </script>
+
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbwLbPr5g35t-qKXhysIw2V9WUQBYae18&callback=myMap"></script>
+
+</body>
+</html>

@@ -1,7 +1,7 @@
 ﻿using System.ComponentModel.DataAnnotations;
 using System.Diagnostics.Metrics;
 
-namespace GoogleMap.Models
+namespace GoogleMap.DBModels
 {
     public class Location
     {
@@ -36,8 +36,8 @@ namespace GoogleMap.Models
         public string Country { get; set; }
         public string PlaceId { get; set; }
     }
-     
-}      
+
+}
 
 
 

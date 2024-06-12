@@ -1,4 +1,5 @@
 ﻿using GoogleMap.Data;
+using GoogleMap.DBModels;
 using GoogleMap.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
@@ -47,7 +48,7 @@ namespace GoogleMap.Controllers
         {
             // Extract the coordinates from the JSON data
 
-            bool isLocationSaved = await _dBcontext.Location.AnyAsync(x => x.PlaceId == data.PlaceId);
+            bool isLocationSaved = await _dBcontext.Locations.AnyAsync(x => x.PlaceId == data.PlaceId);
             // Perform your logic with the received coordinates
             // For example, save to database or process further
             if(!isLocationSaved)
@@ -66,7 +67,7 @@ namespace GoogleMap.Controllers
                     LocationCode = $"{data.Latitude}+{data.Longitude}",
                     PlaceId = data.PlaceId
                 };
-                await _dBcontext.Location.AddAsync(loc);
+                await _dBcontext.Locations.AddAsync(loc);
                 await _dBcontext.SaveChangesAsync();
             }
            
@@ -96,7 +97,7 @@ namespace GoogleMap.Controllers
         public async Task<ActionResult> GetLocationByPlaceId(string placeId)
         {
            
-            var location = await _dBcontext.Location.FirstOrDefaultAsync(x => x.PlaceId == placeId);
+            var location = await _dBcontext.Locations.FirstOrDefaultAsync(x => x.PlaceId == placeId);
             if(location == null) return Json(new { message = "not found", });
             return Json(new { message = "data found", locationDetails = location });
         }

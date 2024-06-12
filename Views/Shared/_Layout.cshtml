@@ -25,17 +25,24 @@
     <header>
         <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
             <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Map">GoogleMap</a>
+                <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="CreateArea">Create Location</a>
                @*  <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="MapInsert">GoogleMap</a>
                 <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Map">GoogleMap</a> *@
                
                 <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
                     <ul class="navbar-nav flex-grow-1">
-                        <li class="nav-item">
+                     @*    <li class="nav-item">
                             <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Map">Map</a>
                         </li>
                         <li class="nav-item">
                             <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="MapInsert">Map insert</a>
+                        </li> *@
+                        <li class="nav-item">
+                            <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="Index">Search Location</a>
+                        </li>
+
+                        <li class="nav-item">
+                            <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="CreateArea">Create Location</a>
                         </li>
 
                     </ul>
