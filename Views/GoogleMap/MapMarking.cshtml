@@ -89,6 +89,7 @@
         let map;
         let markers = [];
         let clickedPoints = [];
+        let sortedPoints = [];
         let polygon;
         let centerMarker;
         let centerPoint;
@@ -181,7 +182,7 @@
         }
         function drawPolygon() {
             // Create a new polygon with the clicked points
-            const sortedPoints = getConvexHull(clickedPoints);
+       sortedPoints = getConvexHull(clickedPoints);
 
             polygon = new google.maps.Polygon({
                 paths: sortedPoints,
@@ -257,10 +258,15 @@
         }
         function saveData() {
             const userInput = document.getElementById('userInput').value;
+            if (userInput == null || userInput == '') {
+                alert("please enter an address");
+                return;
+            }
+
             const formattedAddress = document.getElementById('formattedAddress').value;
             const polygondata = {
                 Center: { Lat: centerPoint.lat, Lng: centerPoint.lng },
-                Points: clickedPoints.map(point => ({ Lat: point.lat, Lng: point.lng })),
+                Points: sortedPoints.map(point => ({ Lat: point.lat, Lng: point.lng })),
                 UserInput: userInput,
                 FormattedAddress: formattedAddress
             };
@@ -308,6 +314,7 @@
             markers.forEach(marker => marker.setMap(null));
             markers = [];
             clickedPoints = [];
+            sortedPoints = [];
             centerPoint = null;
 
             document.getElementById('saveBtn').style.display = 'none';

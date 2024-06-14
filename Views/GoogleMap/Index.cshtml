@@ -1,15 +1,30 @@
 ﻿<!DOCTYPE html>
+<style>
+    #googleMap {
+        flex-grow: 1;
+        height: 100%;
+    }
+</style>
 <html>
 <body>
 
     <h1>My First Google Map</h1>
-
-    <div id="googleMap" style="width:100%;height:400px;"></div>
     <div id="locationDetails" style="margin-top:20px;"></div>
+    <div id="locationCode" style="margin-top:20px;"></div>
+    <div style="margin-top:20px;" class="d-inline-flex">
+        <input type="text" id="searchInput" placeholder="search by address">
+        <button id="searchBtn" class="btn btn-primary" onclick="searchLocationDetails()">Search</button>
+    </div >
+    
+    <div id="googleMap" style="width:100%;height:600px;margin-top:20px;"></div>
+    
 
     <script>
         var map;
         var marker;
+        let polygon;
+        let markers = [];
+        let centerMarker;
         function myMap() {
             // Use HTML5 Geolocation API to get the user's current position
             if (navigator.geolocation) {
@@ -18,23 +33,19 @@
 
                     var mapProp = {
                         center: userLocation,
-                        zoom: 10, // Adjust zoom level as needed
+                        zoom: 15, // Adjust zoom level as needed
                     };
                     map = new google.maps.Map(document.getElementById("googleMap"), mapProp);
 
                     // Add a marker at the user's current location
-                    marker = new google.maps.Marker({
-                        position: userLocation,
-                        map: map,
-                        title: "You are here"
-                    });
+                 
 
                     // Add a click event listener to the map
                     google.maps.event.addListener(map, 'click', function (event) {
                         var clickedLocation = event.latLng;
                         placeMarker(clickedLocation);
                         displayLocationDetails(clickedLocation);
-                        markArea(clickedLocation);
+                     //   markArea(clickedLocation);
                     });
 
                     // Display details of the user's current location
@@ -60,27 +71,72 @@
         function displayLocationDetails(location) {
             var geocoder = new google.maps.Geocoder();
 
-            geocoder.geocode({ 'location': location }, function (results, status) {
-                if (status === 'OK') {
-                    if (results.length > 0) {
-                        // Calculate distances between each result's location and the target location
-                        var address = results.filter((x) => { return x.types.includes("premise"); })
-                        console.log("promiss address:", JSON.stringify(address))
-                        var details = results.map((result, index) => {
-                            var formattedAddress = result.formatted_address;
-                           // console.log("place: " + index + 1 + "" + JSON.stringify(result))
-                            var types = result.types.join(', ');
-                            return `<p><strong>Result ${index + 1}:</strong><br> <strong>Formatted Address:</strong> ${formattedAddress}<br> <strong>Types:</strong> ${types}</p>`;
-                        }).join('');
+            if (location) {
+                
+                const latitude = location.lat();
+                const longitude = location.lng();
 
-                        document.getElementById('locationDetails').innerHTML = details;
-                    } else {
-                        document.getElementById('locationDetails').innerHTML = 'No results found';
-                    }
-                } else {
-                    document.getElementById('locationDetails').innerHTML = 'Geocoder failed due to: ' + status;
-                }
-            });
+                fetch(`/GoogleMap/GetPolygonByCordinate?latitude=${latitude}&longitude=${longitude}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                            //alert(`The clicked location is inside a polygon. Center: (${data.result.centerLat}, ${data.result.centerLng})`);
+                            console.log("matching addresss:",data)
+                            document.getElementById("locationDetails").innerHTML = "Address: " + data.result.address;
+                            document.getElementById("locationCode").innerHTML = "Code is: "+data.result.centerCode ;
+                        } else {
+                            document.getElementById("locationDetails").innerHTML = "not found";
+                            document.getElementById("locationCode").innerHTML = "";
+                        }
+                    })
+                    .catch(error => console.error('Error:', error));
+            } else {
+                alert('Please click on the map to select a location first.');
+            }
+        } function searchLocationDetails() {
+            const searchInput = document.getElementById('searchInput').value;
+            if (searchInput == null || searchInput == '') {
+                alert("enter value!!");
+                return;
+            }
+
+
+            fetch(`/GoogleMap/GEtPolygonByAddress?address=${searchInput}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        if (data.success) {
+                        // Clear existing marker
+                        if (marker) {
+                            marker.setMap(null);
+                        }
+                            //alert(`The clicked location is inside a polygon. Center: (${data.result.centerLat}, ${data.result.centerLng})`);
+                            console.log("matching addresss:", data)
+                            document.getElementById("locationDetails").innerHTML = "Address: " + data.result.address;
+                            document.getElementById("locationCode").innerHTML = "Code is: " + data.result.centerCode;
+                            marker = new google.maps.Marker({
+                            position: { lat: data.result.lat, lng: data.result .lng}
+,
+                            map: map
+                        });
+
+                        var newCenter = { lat: data.result.lat, lng: data.result.lng };
+                        map.setCenter(newCenter);
+                        // Add markers and polygon
+                        addMarkersAndPolygon(data.result.polygonPoints);
+                       
+                        } else {
+            // Clear existing markers and polygon
+            if(marker){
+                marker.setMap(null);
+            }
+            clearMarkers();
+            clearPolygon();
+                            document.getElementById("locationDetails").innerHTML = "not found";
+                            document.getElementById("locationCode").innerHTML = "";
+                        }
+                    })
+                    .catch(error => console.error('Error:', error));
+          
         }
         function highlightBuilding(location) {
             map.data.forEach(function (feature) {
@@ -132,6 +188,45 @@
             const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
 
             return R * c; // Distance in meters
+        }
+        function addMarkersAndPolygon(coords) {
+            // Clear existing markers and polygon
+            clearMarkers();
+            clearPolygon();
+
+            // Add markers
+            // coords.forEach(function (coord) {
+            //     var marker = new google.maps.Marker({
+            //         position: coord,
+            //         map: map
+            //     });
+            //     markers.push(marker);
+            // });
+
+            // Add polygon
+            polygon = new google.maps.Polygon({
+                paths: coords.concat([coords[0]]), // Close the polygon
+                strokeColor: '#FF0000',
+                strokeOpacity: 0.8,
+                strokeWeight: 2,
+                fillColor: '#FF0000',
+                fillOpacity: 0.35
+            });
+            polygon.setMap(map);
+        }
+
+        function clearMarkers() {
+            markers.forEach(function (marker) {
+                marker.setMap(null);
+            });
+            markers = [];
+        }
+
+        function clearPolygon() {
+            if (polygon) {
+                polygon.setMap(null);
+                polygon = null;
+            }
         }
     </script>
 
