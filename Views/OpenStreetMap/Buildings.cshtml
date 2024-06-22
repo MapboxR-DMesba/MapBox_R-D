@@ -1,0 +1,230 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>OpenStreetMap Block Boundary</title>
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+
+    <style>
+        #map {
+            height: 700px;
+        }
+    </style>
+</head>
+<body>
+
+    <div id="map"></div>
+
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+
+    <script>
+        var polygons = [];
+        var clickedPoint;
+        $(document).ready(function () {
+            var map = L.map('map').setView([23.8103, 90.4125], 12); // Centered on Dhaka, Bangladesh
+            //var map = L.map('map').setView([-1.8312, -78.1834], 12); // Centered on Quito, Ecuador
+
+            // Array to store all polygons
+
+            // Add OpenStreetMap tiles
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                maxZoom: 19,
+                attribution: 'Map data &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+            }).addTo(map);
+            // Add search control
+          //  L.Control.geocoder().addTo(map);
+
+            function onMapClick(e) {
+                var lat = e.latlng.lat.toFixed(6);
+                var lon = e.latlng.lng.toFixed(6);
+              clickedPoint = L.latLng(lat, lon);
+                console.log('You clicked the map at: ' + lat + ', ' + lon);
+
+                // Constructing Overpass API URL to fetch nearby `way` elements
+               // var overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json];(way(around:10,${lat},${lon})[building];);out;`;
+                 var overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json];(way(around:100,${lat},${lon})[building];);out;`;
+               // var overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json];(node(around:1,${lat},${lon});way(around:1,${lat},${lon});relation(around:1,${lat},${lon}););out;`;
+
+                
+
+                $.ajax({
+                    url: overpassUrl,
+                    type: 'GET',
+                    dataType: 'json',
+                    timeout: 30000,
+                    success: function (response) {
+                        console.log('API Response:', response);
+
+
+
+                        // Clear previous polygons if any
+                        // Clear previous layers if any
+                        map.eachLayer(function (layer) {
+                            if (layer instanceof L.Polygon) {
+                                map.removeLayer(layer);
+                            }
+                            if (layer instanceof L.Marker) {
+                                map.removeLayer(layer);
+                            }
+                        });
+                        polygons = [];
+                        let endProcess = 0;
+                        let elementcount = 0;
+                        if (response.elements.length === 0) {
+                            alert('No elements found near this location.');
+                            return;
+                        }
+                        // Process `way` elements
+                        response.elements.forEach(function (element) {
+                            if (element.type === 'way' && element.nodes.length > 0 && endProcess !=1) {
+                               
+                                var nodes = element.nodes;
+                                var nodeDetailsRequests = nodes.map(function (nodeId) {
+                                    return $.ajax({
+                                        url: `https://api.openstreetmap.org/api/0.6/node/${nodeId}.json`,
+                                        type: 'GET',
+                                        dataType: 'json',
+                                        async: false,
+                                    });
+                                });
+                           
+                                // Execute all node detail requests
+                                $.when.apply($, nodeDetailsRequests).done(function () {
+                                    var nodeDetailsResponses = Array.prototype.slice.call(arguments);
+                                    var latLngs = [];
+
+                                    // Process each node detail response
+                                    nodeDetailsResponses.forEach(function (response) {
+                                        var node = response[0].elements[0]; // Assuming single element per response
+                                        if (node) {
+                                            latLngs.push([node.lat, node.lon]);
+                                        }
+                                    });
+                                    // Create and add polygon to map
+                                    if (latLngs.length > 0) {
+                                        console.log("block polygon: ", latLngs)
+                                        // let polygon = L.polygon(latLngs).addTo(map);
+                                        let polygon = L.polygon(latLngs);
+                                        if (polygon && polygon.getBounds().contains(clickedPoint)) {
+                                            polygon.addTo(map)
+                                            polygon.setStyle({ color: 'red', fillOpacity: 0.5 });
+
+                                            // Add marker to the center of the nearest polygon
+                                            var polygonCenter = polygon.getBounds().getCenter();
+                                            var centerMarker = L.marker(polygonCenter).addTo(map);
+                                            centerMarker.bindPopup('Center of Polygon');
+
+                                            // Clear arrays
+                                           // polygons = [nearestPolygon];
+
+                                            // Zoom to the extent of the nearest polygon
+                                            map.fitBounds(polygon.getBounds());
+                                            return;
+                                            //return nearestPolygon;
+
+                                        }
+                                       // polygons.push(polygon);
+
+
+                                    }
+                                    // elementcount++;
+
+                                    // if (elementcount === response.elements.length) {
+                                    //     findNearestPolygon(lat, lon)
+                                    // }
+                                }).fail(function () {
+                                   
+                                    // elementcount++;
+                                    // if (elementcount === response.elements.length) {
+                                    //     findNearestPolygon(lat, lon)
+                                    // }
+                                    // console.error('Error fetching node details.');
+                                    // alert('Failed to fetch node details.');
+                                });
+                            }
+                          
+                           
+                        });
+                    
+                       
+                        // setTimeout(function () { // Timeout to ensure all polygons are added before finding the nearest
+                        //     if (polygons.length > 0) {
+                        //         findNearestPolygon(lat, lon)
+                        //     }
+                        // }, 10000);
+                    },
+                    error: function (xhr, status, error) {
+                        console.error('Error fetching data:', error);
+                        alert('Failed to fetch block boundary.');
+                    }
+                });
+
+                function findNearestPolygon(lat, lon) {
+                    var nearestPolygon = null;
+                    var minDistance = Number.MAX_VALUE;
+                    //var clickedPoint = L.latLng(lat, lon);
+                    polygons.forEach(function (polygon) {
+                        var polygonCenter = polygon.getBounds().getCenter();
+                        var distance = calculateDistance(lat, lon, polygonCenter.lat, polygonCenter.lng);
+                        if (distance < minDistance) {
+                            minDistance = distance;
+                            nearestPolygon = polygon;
+                        }
+                    });
+                    if (nearestPolygon && nearestPolygon.getBounds().contains(clickedPoint)) {
+                        nearestPolygon.addTo(map)
+                        nearestPolygon.setStyle({ color: 'red', fillOpacity: 0.5 });
+
+                        // Add marker to the center of the nearest polygon
+                        var polygonCenter = nearestPolygon.getBounds().getCenter();
+                        var centerMarker = L.marker(polygonCenter).addTo(map);
+                        centerMarker.bindPopup('Center of Polygon');
+
+                        // Clear arrays
+                        polygons = [nearestPolygon];
+
+                        // Zoom to the extent of the nearest polygon
+                        map.fitBounds(nearestPolygon.getBounds());
+                        //return nearestPolygon;
+
+                    } else {
+                        alert('No polygon found at the clicked location.');
+                    }
+                   
+
+
+
+
+
+                }
+            }
+
+            // Attach click event listener to the map
+            map.on('click', onMapClick);
+        });
+     
+
+       
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            var R = 6371000; // Radius of the Earth in meters
+            var phi1 = lat1 * Math.PI / 180;
+            var phi2 = lat2 * Math.PI / 180;
+            var deltaPhi = (lat2 - lat1) * Math.PI / 180;
+            var deltaLambda = (lon2 - lon1) * Math.PI / 180;
+
+            var a = Math.sin(deltaPhi / 2) * Math.sin(deltaPhi / 2) +
+                Math.cos(phi1) * Math.cos(phi2) *
+                Math.sin(deltaLambda / 2) * Math.sin(deltaLambda / 2);
+            var c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+
+            var distance = R * c; // Distance in meters
+
+            return distance;
+        }
+
+    </script>
+
+</body>
+</html>

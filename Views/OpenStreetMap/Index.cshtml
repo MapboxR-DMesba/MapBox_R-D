@@ -1,0 +1,149 @@
+﻿<!DOCTYPE html>
+<style>
+    #map {
+        height: 100%;
+    }
+
+    html,
+    body {
+        height: 100%;
+        margin: 0;
+        padding: 0;
+    }
+</style>
+<html>
+<body>
+    <h1>Buildings from OpenStreetMap on Google Maps</h1>
+    <div id="map" style="width:100%;height:600px;margin-top:20px;"></div>
+    <script>
+        let map;
+
+        // Initialize the map
+        function myMap() {
+            map = new google.maps.Map(document.getElementById("map"), {
+                zoom: 16,
+                center: { lat: 52.5200, lng: 13.4050 }, // Center map on Berlin
+                mapTypeId: "satellite",
+            });
+
+            // Fetch building data from OSM using Overpass API
+            fetchBuildings();
+        }
+
+        // Fetch building data from Overpass API
+        function fetchBuildings() {
+            const overpassUrl = "https://overpass-api.de/api/interpreter";
+            const query = `
+                  [out:json];
+                  area[name="Berlin"]->.searchArea;
+                  (
+                    way["building"](area.searchArea);
+                    relation["building"](area.searchArea);
+                  );
+                  out body;
+                  >;
+                  out skel qt;
+                `;
+
+            fetch(overpassUrl, {
+                method: "POST",
+                headers: {
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: new URLSearchParams({
+                    data: query
+                })
+            })
+                .then(response => response.json())
+                .then(data => {
+                    console.log("OSM Data:", data);  // Debugging: Log the full response
+                    processOSMData(data);
+                }
+                )
+                .catch(error => console.error("Error fetching OSM data:", error));
+        }
+
+        // Process OSM data and draw buildings on the map
+        function processOSMData(data) {
+            if (!data || !data.elements) {
+                console.error("Invalid OSM data:", data);
+                return;
+            }
+            // Assuming 'response' is the object containing the segmented data
+            let elements = [];
+
+            // Iterate through each chunk
+           data.elements.forEach(chunk => {
+                // Concatenate elements of each chunk into 'elements' array
+                elements = elements.concat(chunk);
+            });
+
+            // Log the total number of elements
+            console.log(`Total elements: ${elements.length}`);
+
+            // Filter for buildings
+            let buildings = elements.filter(element => {
+                // Check if the element has tags
+                if (element.type === 'way' && element.tags) {
+                    // Check if the tags include 'building'
+                    return element.tags.hasOwnProperty('building');
+                }
+                return false;
+            });
+
+            // Log the number of buildings found
+            console.log(`Number of buildings found: ${buildings.length}`);
+
+            // Check a few sample buildings
+            console.log(buildings.slice(0, 5));
+
+
+
+
+            // const buildings = data.elements.filter(element => element.type === "way" && element.geometry);
+            // console.log("Buildings:", buildings);  // Debugging: Log the filtered buildings
+
+            if (buildings.length === 0) {
+                console.warn("No buildings found in the OSM data.");
+            }
+
+            buildings.forEach(building => {
+                const paths = building.geometry.map(point => ({
+                    lat: point.lat,
+                    lng: point.lon,
+                }));
+
+                const buildingPolygon = new google.maps.Polygon({
+                    paths: paths,
+                    strokeColor: "#FF0000",
+                    strokeOpacity: 0.8,
+                    strokeWeight: 2,
+                    fillColor: "#FF0000",
+                    fillOpacity: 0.35,
+                });
+
+                buildingPolygon.setMap(map);
+
+                // Add click listener to display info window
+                buildingPolygon.addListener('click', () => {
+                    const infoWindow = new google.maps.InfoWindow({
+                        content: `
+                        <div>
+                          <h3>Building Information</h3>
+                          <p>ID: ${building.id}</p>
+                          <p>Type: ${building.tags?.building || 'N/A'}</p>
+                        </div>
+                      `,
+                        position: paths[0],
+                    });
+                    infoWindow.open(map);
+                });
+            });
+        }
+        
+    </script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbwLbPr5g35t-qKXhysIw2V9WUQBYae18&callback=myMap"></script>
+ 
+</body>
+
+</html>

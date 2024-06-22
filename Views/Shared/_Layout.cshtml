@@ -1,4 +1,6 @@
-﻿<!DOCTYPE html>
+﻿@using NetTopologySuite.Geometries;
+@using NetTopologySuite.IO;
+<!DOCTYPE html>
 <html lang="en">
 <head>
     <meta charset="utf-8" />
@@ -6,9 +8,11 @@
 
     <script src='https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.js'></script>
     <link href='https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.css' rel='stylesheet' />
+    <script src="https://cdn.jsdelivr.net/npm/turf@7.0.0-alpha.1/dist/turf.min.js"></script>
     <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
+    
     <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css" type="text/css">
-
+ 
     <style>
         body {
             margin: 0;
@@ -25,7 +29,15 @@
     <header>
         <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
             <div class="container-fluid">
-                <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="CreateArea">Create Location</a>
+              @*   <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="CreateArea">Create Location</a> *@
+              <div>
+                    <a class="" asp-area="" asp-controller="Home" asp-action="Map">MapBox Area Save</a>
+              </div>
+              <div>
+                    <a class="" asp-area="" asp-controller="Home" asp-action="Index">MapBox Area Search</a>
+              </div>
+             
+              
                @*  <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="MapInsert">GoogleMap</a>
                 <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Map">GoogleMap</a> *@
                
@@ -36,7 +48,13 @@
                         </li>
                         <li class="nav-item">
                             <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="MapInsert">Map insert</a>
-                        </li> *@
+                        </li> 
+                        <li class="nav-item">
+                            <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Map">MapBox Area Save</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">MapBox Area Search</a>
+                        </li>
                         <li class="nav-item">
                             <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="Index">Search Location</a>
                         </li>
@@ -44,9 +62,18 @@
                         <li class="nav-item">
                             <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="CreateArea">Create Location</a>
                         </li>
+                        <li class="nav-item">
+                            <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="MarkArea"> Location Marking</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="MarkBuilding"> Building Marking</a>
+                        </li>
+                        <li class="nav-item">
+                            <a class="navbar-brand" asp-area="" asp-controller="OpenStreetMap" asp-action="Index">OpenStreet Map</a>
+                        </li>*@
 
                     </ul>
-                </div>
+                </div> 
             </div>
         </nav>
     </header>

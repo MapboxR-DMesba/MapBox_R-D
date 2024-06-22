@@ -5,16 +5,17 @@ using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.Geometries.Prepared;
+using Newtonsoft.Json.Linq;
 
 namespace GoogleMap.Controllers
 {
-    public class GoogleMapController : Controller
+    public class OpenStreetMapController : Controller
     {
         private readonly ILogger<GoogleMapController> _logger;
         private readonly AppDbContext _dBcontext;
         private readonly IHttpClientFactory _httpClientFactory;
         private readonly HttpClient _httpClient;
-        public GoogleMapController(ILogger<GoogleMapController> logger, AppDbContext dBcontext, IHttpClientFactory httpClientFactory)
+        public OpenStreetMapController(ILogger<GoogleMapController> logger, AppDbContext dBcontext, IHttpClientFactory httpClientFactory)
         {
             _logger = logger;
             _dBcontext = dBcontext;
@@ -23,19 +24,11 @@ namespace GoogleMap.Controllers
         }
         public IActionResult Index()
         {
-            return View();
-        }
-        public IActionResult MarkBuilding()
-        {
-            return View();
+            return View("Buildings");
         }
         public IActionResult CreateArea()
         {
             return View("MapMarking");
-        }
-        public IActionResult MarkArea()
-        {
-            return View("LocationDetection");
         }
         [HttpPost]
         public async Task<IActionResult> SavePolygon(PolygonModel polygon)
@@ -119,7 +112,7 @@ namespace GoogleMap.Controllers
             if(string.IsNullOrEmpty(address))
                 return Json(new { success = false });
 
-            PolygonCenter? polygon = await _dBcontext.PolygonCenters.AsNoTracking().Include(p => p.PolygonPoints).FirstOrDefaultAsync(x => x.UserAddress == address || x.FormatedAddress == address || x.CenterCode == address);
+            PolygonCenter? polygon = await _dBcontext.PolygonCenters.AsNoTracking().Include(p => p.PolygonPoints).FirstOrDefaultAsync(x => x.UserAddress == address);
             if(polygon == null)
                 return Json(new { success = false });
 
@@ -182,6 +175,45 @@ namespace GoogleMap.Controllers
         private double CrossProduct(PolygonPoint o, PolygonPoint a, PolygonPoint b)
         {
             return (a.Lat - o.Lat) * (b.Lng - o.Lng) - (a.Lng - o.Lng) * (b.Lat - o.Lat);
+        }
+
+       
+        public async Task<IActionResult> GetBuildings()
+        {
+            try
+            {
+                var query = @"
+                   [out:json];
+                   area[name='New York City']->.searchArea;
+                   (
+                     way['building'](area.searchArea);
+                   );
+                   out body;
+                ";
+
+                var response = await _httpClient.GetStringAsync($"http://overpass-api.de/api/interpreter?data={Uri.EscapeDataString(query)}");
+                var parsedResponse = JObject.Parse(response);
+                var elements = parsedResponse["elements"];
+                var buildings = parsedResponse["elements"]
+                    .Where(e => e["type"].ToString() == "way" && e["nodes"].HasValues)
+                    .Select(e => new
+                    {
+                        Id = e["id"].ToString(),
+                        BoundingBox = new
+                        {
+                            MinLat = e["bounds"]["minlat"].ToString(),
+                            MaxLat = e["bounds"]["maxlat"].ToString(),
+                            MinLon = e["bounds"]["minlon"].ToString(),
+                            MaxLon = e["bounds"]["maxlon"].ToString()
+                        }
+                    });
+
+                return Ok(buildings);
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, $"Internal server error: {ex.Message}");
+            }
         }
     }
 }

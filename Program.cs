@@ -28,6 +28,6 @@ app.UseAuthorization();
 
 app.MapControllerRoute(
     name: "default",
-    pattern: "{controller=GoogleMap}/{action=CreateArea}/{id?}");
+    pattern: "{controller=Home}/{action=Map}/{id?}");
 
 app.Run();

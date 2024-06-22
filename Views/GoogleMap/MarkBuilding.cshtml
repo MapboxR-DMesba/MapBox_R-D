@@ -1,0 +1,125 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Places API Nearby Search</title>
+    
+</head>
+<body >
+    <div id="googleMap" style="width:100%;height:600px;"></div>
+    <div id="streetview" style="height: 400px;"></div>
+    <script>
+        let map;
+        let service;
+        let infowindow;
+
+        function initMap() {
+            const center = { lat: -34.397, lng: 150.644 }; // Initial center of the map
+
+            map = new google.maps.Map(document.getElementById('googleMap'), {
+                center: center,
+                zoom: 15
+            });
+
+            service = new google.maps.places.PlacesService(map);
+            infowindow = new google.maps.InfoWindow();
+
+            map.addListener('click', function (event) {
+                const location = event.latLng;
+                //performSearch(location);
+                reverseGeocode(location);
+            });
+        }
+        function reverseGeocode(location) {
+            const geocoder = new google.maps.Geocoder();
+
+            geocoder.geocode({ location: location }, function (results, status) {
+                if (status === 'OK') {
+                    if (results[0]) {
+                        console.log('Reverse geocoding result:', results[0].formatted_address);
+                        // Optionally, you can show this information in an info window or marker
+                        placeMarker(location, results[0].formatted_address);
+
+                        // Check if there is Street View coverage at the location
+                        const streetViewService = new google.maps.StreetViewService();
+                        streetViewService.getPanorama({ location: location, radius: 50 }, function (data, status) {
+                            debugger;
+                            if (status === 'OK') {
+                                console.log('Street View available at this location');
+                                // Optionally, you can display a Street View panorama
+                                const panorama = new google.maps.StreetViewPanorama(
+                                    document.getElementById('streetview'),
+                                    {
+                                        position: location,
+                                        pov: { heading: 165, pitch: 0 },
+                                        zoom: 1
+                                    }
+                                );
+                                map.setStreetView(panorama);
+                            } else {
+                                console.log('No Street View available at this location');
+                            }
+                        });
+                    } else {
+                        console.error('No reverse geocoding results found');
+                    }
+                } else {
+                    console.error('Geocoder failed due to:', status);
+                }
+            });
+        }
+
+        function performSearch(location) {
+            const request = {
+                location: location,
+                radius: 100, // Distance in meters
+                type: ['establishment'] // Replace with the desired place type
+            };
+
+            service.nearbySearch(request, function (results, status) {
+                if (status === google.maps.places.PlacesServiceStatus.OK) {
+                    clearMarkers();
+                    for (let i = 0; i < results.length; i++) {
+                        createMarker(results[i]);
+                    }
+                } else {
+                    console.log('Places search failed due to: ' + status);
+                }
+            });
+        }
+
+        let markers = [];
+
+        function createMarker(place) {
+            const marker = new google.maps.Marker({
+                map: map,
+                position: place.geometry.location
+            });
+
+            google.maps.event.addListener(marker, 'click', function () {
+                infowindow.setContent(place.name);
+                infowindow.open(map, this);
+            });
+
+            markers.push(marker);
+        }
+
+        function clearMarkers() {
+            for (let i = 0; i < markers.length; i++) {
+                markers[i].setMap(null);
+            }
+            markers = [];
+        }
+        function placeMarker(location, address) {
+            new google.maps.Marker({
+                position: location,
+                map: map,
+                title: address
+            });
+        }
+
+        window.onload = initMap;
+    </script>
+   
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbwLbPr5g35t-qKXhysIw2V9WUQBYae18&callback=initMap&libraries=geometry,places"></script>
+</body>
+</html>

@@ -82,12 +82,19 @@
             <button id="saveBtn" style="display:none;" >Save</button>
             <button id="resetBtn" style="display:none;" >Reset</button>
     </div>
+        <div class="form-group">
+            <input id="searchInput" type="text" placeholder="Enter a location">
+    </div>
+     
     <div id="googleMap" style="width:100%;height:600px;"></div>
 </div>
 
     <script>
+        var autocomplete;
+        var clickedPoint;
         let map;
         let markers = [];
+        let  marker;
         let clickedPoints = [];
         let sortedPoints = [];
         let polygon;
@@ -95,32 +102,155 @@
         let centerPoint;
         let geocoder;
         function myMap() {
-            if (navigator.geolocation) {
-                navigator.geolocation.getCurrentPosition(function (position) {
-                    var userLocation = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
+            
+               
+                    //ar userLocation = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
 
-                    var mapProp = {
-                        center: userLocation,
-                        zoom: 15, // Adjust zoom level as needed
-                    };
-                    map = new google.maps.Map(document.getElementById("googleMap"), mapProp);
+            map = new google.maps.Map(document.getElementById('googleMap'), {
+                center: { lat: -34.397, lng: 150.644 },  // Initial map center (example)
+                zoom: 8  // Initial zoom level (0 = world, higher numbers = closer)
+            });
                     geocoder = new google.maps.Geocoder();
                     // Add a click event listener to the map
                     google.maps.event.addListener(map, 'click', function (event) {
                         var clickedLocation = event.latLng;
-                        
-                        placeMarker(clickedLocation);
+
+                GetPolygon(clickedLocation);
                     });
+            // Create autocomplete object and bind it to the search input
+            autocomplete = new google.maps.places.Autocomplete(
+                document.getElementById('searchInput'), {
+                types: ['geocode']  // Restrict to addresses only
+            });
+
+            // Add listener to handle place selection from autocomplete dropdown
+            autocomplete.addListener('place_changed', function () {
+                var place = autocomplete.getPlace();
+                if (!place.geometry) {
+                    console.error('Place selection failed:', place);
+                    return;
+                }
+
+                // Center map on selected place
+                map.setCenter(place.geometry.location);
+                map.setZoom(15);  // Zoom level for detailed view
+            });
                     document.getElementById('confirmBtn').addEventListener('click', confirmPolygon);
                  document.getElementById('saveBtn').addEventListener('click', saveData);
                     document.getElementById('resetBtn').addEventListener('click', resetMap);
-                }, function () {
-                    handleLocationError(true);
-                });
-            } else {
-                // Browser doesn't support Geolocation
-                handleLocationError(false);
-            }
+                
+           
+        }
+        function GetPolygon(clickedLocation) {
+            var lat = clickedLocation.lat();
+            var lon = clickedLocation.lng();
+            clickedPoint = clickedLocation;
+            console.log('You clicked the map at: ' + lat + ', ' + lon);
+
+            // Constructing Overpass API URL to fetch nearby `way` elements
+            // var overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json];(way(around:10,${lat},${lon})[building];);out;`;
+            var overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json];(way(around:30,${lat},${lon})[building];);out;`;
+            // var overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json];(node(around:1,${lat},${lon});way(around:1,${lat},${lon});relation(around:1,${lat},${lon}););out;`;
+
+
+
+            $.ajax({
+                url: overpassUrl,
+                type: 'GET',
+                dataType: 'json',
+                timeout: 30000,
+                success: function (response) {
+                    console.log('API Response:', response);
+
+
+
+                    // Clear previous polygons if any
+                    // Clear previous layers if any
+                    if (marker) {
+                        marker.setMap(null);
+                    }
+                    if (polygon) {
+                        polygon.setMap(null);
+                        polygon = null;
+                    }
+                    polygons = [];
+                    let endProcess = 0;
+                    let elementcount = 0;
+                    if (response.elements.length === 0) {
+                        alert('No elements found near this location.');
+                        return;
+                    }
+                    // Process `way` elements
+                    response.elements.forEach(function (element) {
+                        if (element.type === 'way' && element.nodes.length > 0) {
+
+                            var nodes = element.nodes;
+                            var nodeDetailsRequests = nodes.map(function (nodeId) {
+                                return $.ajax({
+                                    url: `https://api.openstreetmap.org/api/0.6/node/${nodeId}.json`,
+                                    type: 'GET',
+                                    dataType: 'json',
+                                    async: false,
+                                });
+                            });
+
+                            // Execute all node detail requests
+                            $.when.apply($, nodeDetailsRequests).done(function () {
+                                var nodeDetailsResponses = Array.prototype.slice.call(arguments);
+                                clickedPoints = [];
+
+                                // Process each node detail response
+                                nodeDetailsResponses.forEach(function (response) {
+                                    var node = response[0].elements[0]; // Assuming single element per response
+                                    if (node) {
+                                        // latLngs.push([node.lat, node.lon]);
+                                        clickedPoints.push({ lat: node.lat, lng: node.lon });
+                                    }
+                                });
+                                // Create and add polygon to map
+
+                                if (isPolygon(clickedPoints) == true) {
+                                    console.log("block polygon: ", clickedPoints)
+                                    //clickedPoints.pop();
+                                    sortedPoints = getConvexHull(clickedPoints);
+                                    polygon = new google.maps.Polygon({
+                                        paths: sortedPoints,
+                                        strokeColor: '#FF0000',
+                                        strokeOpacity: 0.8,
+                                        strokeWeight: 2,
+                                        fillColor: '#FF0000',
+                                        fillOpacity: 0.35
+                                    });
+                                    let isvalidPolygon = isPointInPolygon(lat, lon);
+                                    if (isvalidPolygon == true) {
+                                        polygon.setMap(map);
+
+                                        return;
+                                    }
+
+                                    //return nearestPolygon;
+
+                                }
+                                // polygons.push(polygon);
+
+
+                           
+                            }).fail(function () {
+
+                               
+                            });
+                        }
+
+
+                    });
+
+
+                },
+                error: function (xhr, status, error) {
+                    console.error('Error fetching data:', error);
+                    alert('Failed to fetch block boundary.');
+                }
+            });
         }
 
         function placeMarker(location) {
@@ -168,18 +298,7 @@
                 }
             });
         }
-        function displayRectangle() {
-            var bounds = new google.maps.LatLngBounds();
-            markers.forEach(function (marker) {
-                bounds.extend(marker.getPosition());
-            });
-            var rectangle = new google.maps.Rectangle({
-                bounds: bounds,
-                editable: true,
-                draggable: true,
-                map: map
-            });
-        }
+     
         function drawPolygon() {
             // Create a new polygon with the clicked points
        sortedPoints = getConvexHull(clickedPoints);
@@ -199,10 +318,11 @@
            // clickedPoints = [];
         }
         function getConvexHull(points) {
-           
-            points.sort((a, b) => a.lng() - b.lng() || a.lat() - b.lat());
+            points.pop();
+            console.log("points for convexHull:", points)
+            points.sort((a, b) => a.lng - b.lng || a.lat - b.lat);
 
-            const cross = (o, a, b) => (a.lat() - o.lat()) * (b.lng() - o.lng()) - (a.lng() - o.lng()) * (b.lat() - o.lat());
+            const cross = (o, a, b) => (a.lat - o.lat) * (b.lng - o.lng) - (a.lng - o.lng) * (b.lat - o.lat);
 
             let lower = [];
             for (let point of points) {
@@ -327,9 +447,31 @@
                 placeMarker(event.latLng);
             });
         }
+        function isPolygon(points) {
+            // Check if there are at least three points
+            if (points.length < 3) {
+                return false;
+            }
+
+            // Check if the first and last points are the same (closed loop)
+            const firstPoint = points[0];
+            const lastPoint = points[points.length - 1];
+
+            // Assuming points are objects with lat and lng properties
+            if (firstPoint.lat !== lastPoint.lat || firstPoint.lng !== lastPoint.lng) {
+                return false;
+            }
+
+            return true;
+        }
+        function isPointInPolygon(lat, lng) {
+            const point = new google.maps.LatLng(lat, lng);
+            return google.maps.geometry.poly.containsLocation(point, polygon);
+        }
     </script>
 
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbwLbPr5g35t-qKXhysIw2V9WUQBYae18&callback=myMap"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbwLbPr5g35t-qKXhysIw2V9WUQBYae18&callback=myMap&libraries=geometry,places"></script>
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
 
 </body>
 </html>

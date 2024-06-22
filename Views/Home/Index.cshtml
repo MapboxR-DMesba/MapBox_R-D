@@ -1,8 +1,235 @@
-﻿@{
-    ViewData["Title"] = "Home Page";
+﻿
+@{
+    ViewData["Title"] = "Map Area Search";
 }
+<style>
+    .geocoder-dropdown-item {
+        padding: 5px;
+    }
 
-<div class="text-center">
-    <h1 class="display-4">Welcome</h1>
-    <p>Learn about <a href="https://docs.microsoft.com/aspnet/core">building Web apps with ASP.NET Core</a>.</p>
+    .geocoder-dropdown-icon {
+        margin-right: 10px;
+    }
+
+    .geocoder-dropdown-text {
+        color: #5a3fc0;
+        font-family: Arial, Helvetica, sans-serif;
+        font-size: larger;
+    }
+
+    #controls {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 10px;
+        width: 100%;
+        background-color: #f8f9fa;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        z-index: 1;
+    }
+
+    button {
+        margin: 0 10px;
+        padding: 10px 20px;
+        border: none;
+        background-color: #007bff;
+        color: white;
+        cursor: pointer;
+    }
+
+        button:disabled {
+            background-color: #6c757d;
+        }
+
+    .form-group {
+        margin: 0 10px;
+        width: 200px;
+    }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 5px;
+        }
+
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+        }
+</style>
+
+<h2>@ViewData["Title"]</h2>
+
+
+<div id="locationDetails" style="margin-top:20px;"></div>
+<div id="locationCode" style="margin-top:20px;"></div>
+<div style="margin-top:20px;" class="d-inline-flex">
+    <input type="text" id="searchInput" placeholder="search by address">
+    <button id="searchBtn" class="btn btn-primary" onclick="searchLocationDetails()">Search</button>
 </div>
+<div id="map" style="width: 100%; height: 500px;"></div>
+
+
+  
+            <script>
+    
+    mapboxgl.accessToken = `pk.eyJ1IjoibWVzYmF1bGhhc2FuIiwiYSI6ImNsd3pjMGc5cjA1bHIyanFwOGlib3JtNmMifQ.BYcuMdFSAA3bjnTVN9LGEw`;
+        // var map = new mapboxgl.Map({
+        //     container: 'map',
+        //     style: 'mapbox://styles/mapbox/streets-v11'
+        // });
+    var autocomplete;
+    var clickedPoint;
+    let map;
+    let markers = [];
+    let marker;
+    let clickedPoints = [];
+    let sortedPoints = [];
+    let latLngs = [];
+    let polygon;
+    let centerMarker;
+    let centerPoint;
+    let geocoder;
+    let mapboxAddress;
+                let mapCLickEvent = true;
+     map = new mapboxgl.Map({
+        container: 'map',
+
+        // Choose from Mapbox's core styles, or make your own style with Mapbox Studio
+        style: 'mapbox://styles/mapbox/streets-v12',
+        // center: [-77.04, 38.907],
+        zoom: 11.15
+    });
+
+    if (navigator.geolocation) {
+        navigator.geolocation.getCurrentPosition(function (position) {
+            var latitude = position.coords.latitude;
+            var longitude = position.coords.longitude;
+
+            // Update map center
+            map.setCenter([longitude, latitude]);
+
+                marker = new mapboxgl.Marker()
+                .setLngLat([longitude, latitude])
+                .addTo(map);
+            let coordinates = {
+                lng : longitude,
+                lat : latitude
+            };
+           // getLocationDetails(coordinates);
+        });
+    } else {
+        alert('Geolocation is not supported by your browser.');
+    }
+ 
+     geocoder = new MapboxGeocoder({
+        accessToken: mapboxgl.accessToken,
+        types: 'poi',
+        // see https://docs.mapbox.com/api/search/#geocoding-response-object for information about the schema of each response feature
+        render: function (item) {
+            // extract the item's maki icon or use a default
+            const maki = item.properties.maki || 'marker';
+            return `<div class='geocoder-dropdown-item'>
+                        
+                        <span class='geocoder-dropdown-text'>
+                        ${item.text}
+                        </span>
+                    </div>`;
+        },
+        mapboxgl: mapboxgl
+    });
+    map.addControl(geocoder);
+
+
+    // Add a click event listener
+    map.on('click', function (e) {
+
+      
+
+    });
+    function searchLocationDetails() {
+        const searchInput = document.getElementById('searchInput').value;
+        if (searchInput == null || searchInput == '') {
+            alert("enter value!!");
+            return;
+        }
+
+
+        fetch(`/GoogleMap/GEtPolygonByAddress?address=${searchInput}`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.success) {
+                    // Clear existing marker
+                    if (map.getLayer('polygon')) {
+                        map.removeLayer('polygon');
+                        map.removeSource('polygon');
+                    }
+                    if (marker) {
+                        marker.remove();
+                    }
+                    marker = new mapboxgl.Marker()
+                        .setLngLat([data.result.lng, data.result.lat])
+                        .addTo(map)
+                        .setPopup(new mapboxgl.Popup().setHTML('Center of Polygon'));
+                    //alert(`The clicked location is inside a polygon. Center: (${data.result.centerLat}, ${data.result.centerLng})`);
+                    console.log("matching addresss:", data)
+                    document.getElementById("locationDetails").innerHTML = "Address: " + data.result.address;
+                    document.getElementById("locationCode").innerHTML = "Code is: " + data.result.centerCode;
+
+                  //  var newCenter = { lat: data.result.lat, lng: data.result.lng };
+                    map.setCenter([data.result.lng, data.result.lat]);
+                    // Add markers and polygon
+                    let latLngs = data.result.polygonPoints.map(function (coord) {
+                        return [coord.lng, coord.lat];
+                    });
+                    polygon = {
+                        'type': 'Feature',
+                        'geometry': {
+                            'type': 'Polygon',
+                            'coordinates': [latLngs]
+                        }
+                    };
+
+                    map.addLayer({
+                        'id': 'polygon',
+                        'type': 'fill',
+                        'source': {
+                            'type': 'geojson',
+                            'data': polygon
+                        },
+                        'layout': {},
+                        'paint': {
+                            'fill-color': '#088',
+                            'fill-opacity': 0.5
+                        }
+                    });
+
+                    // Zoom to the extent of the polygon
+                    var bounds = latLngs.reduce(function (bounds, coord) {
+                        return bounds.extend(coord);
+                    },
+
+                        new mapboxgl.LngLatBounds(latLngs[0], latLngs[0]));
+                    map.fitBounds(bounds, { padding: 20 });
+                    centerPoint = { lng: data.result.lng, lat: data.result.lat };
+
+                } else {
+                    // Clear existing markers and polygon
+                    if (map.getLayer('polygon')) {
+                        map.removeLayer('polygon');
+                        map.removeSource('polygon');
+                    }
+                    if (marker) {
+                        marker.remove();
+                    }
+                    document.getElementById("locationDetails").innerHTML = "not found";
+                    document.getElementById("locationCode").innerHTML = "";
+                }
+            })
+            .catch(error => console.error('Error:', error));
+
+    }
+   
+    </script>
+
