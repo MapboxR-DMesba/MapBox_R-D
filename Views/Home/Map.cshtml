@@ -176,7 +176,21 @@
         console.log("e:", e)
         console.log("clikedlocation:", clickedLocation)
         if (mapCLickEvent == true) {
-            GetPolygon(clickedLocation);
+            fetch(`/GoogleMap/CheckPOintInPOlygonOrNot?latitude=${clickedLocation.lat}&longitude=${clickedLocation.lng}`)
+                .then(response => response.json())
+                .then(data => {
+                    if (data.isFound) {
+                        alert(`The clicked location is inside a predefined polygon. Address: (${data.result.address})`);
+                        console.log("matching addresss:", data)
+                        return;
+                    } else {
+                        GetPolygon(clickedLocation);
+                    }
+                })
+                .catch(error => { console.error('Error:', error)
+                    return;
+});
+         
         }
        
         //Get the coordinates where the user clicked
@@ -201,14 +215,14 @@
 
     });
     function GetPolygon(clickedLocation) {
-        var lat = clickedLocation.lat;
-        var lon = clickedLocation.lng;
+        var lat = clickedLocation.lat.toFixed(6);
+        var lon = clickedLocation.lng.toFixed(6);
         clickedPoint = clickedLocation;
         console.log('You clicked the map at: ' + lat + ', ' + lon);
 
         // Constructing Overpass API URL to fetch nearby `way` elements
         // var overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json];(way(around:10,${lat},${lon})[building];);out;`;
-        var overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json];(way(around:30,${lat},${lon})[building];);out;`;
+        var overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json];(way(around:200,${lat},${lon})[building];);out;`;
         // var overpassUrl = `https://overpass-api.de/api/interpreter?data=[out:json];(node(around:1,${lat},${lon});way(around:1,${lat},${lon});relation(around:1,${lat},${lon}););out;`;
 
 
@@ -239,6 +253,7 @@
                     alert('No elements found near this location.');
                     return;
                 }
+                console.log("response item:", response.elements.length)
                 // Process `way` elements
                 response.elements.forEach(function (element) {
                     if (element.type === 'way' && element.nodes.length > 0) {
@@ -261,6 +276,7 @@
 
                             // Process each node detail response
                             nodeDetailsResponses.forEach(function (response) {
+                                console.log("node response:", response)
                                 var node = response[0].elements[0]; // Assuming single element per response
                                 if (node) {
                                     latLngs.push([node.lon, node.lat]);
@@ -268,17 +284,20 @@
                             });
                             // Create and add polygon to map
                             if (latLngs.length > 0) {
-                                console.log("block polygon: ", latLngs)
-                                // let polygon = L.polygon(latLngs).addTo(map);
-                                 polygon = {
-                                    'type': 'Feature',
-                                    'geometry': {
-                                        'type': 'Polygon',
-                                        'coordinates': [latLngs]
-                                    }
-                                };
-                                let isInside = turf.booleanPointInPolygon([lon,lat], polygon.geometry);
+                                let isInside = IsPointInsidePolygon([lon, lat], latLngs);
+                               
+                                //let isInside = turf.booleanPointInPolygon([lon,lat], polygon.geometry);
+                               
                                 if(isInside == true){
+                                    console.log("block polygon: ", latLngs)
+                                    // let polygon = L.polygon(latLngs).addTo(map);
+                                    polygon = {
+                                        'type': 'Feature',
+                                        'geometry': {
+                                            'type': 'Polygon',
+                                            'coordinates': [latLngs]
+                                        }
+                                    };
                                     map.addLayer({
                                         'id': 'polygon',
                                         'type': 'fill',
@@ -303,12 +322,12 @@
                                         .setPopup(new mapboxgl.Popup().setHTML('Center of Polygon'));
 
                                     // Zoom to the extent of the polygon
-                                    var bounds = latLngs.reduce(function (bounds, coord) {
-                                        return bounds.extend(coord);
-                                    },
+                                    // var bounds = latLngs.reduce(function (bounds, coord) {
+                                    //     return bounds.extend(coord);
+                                    // },
 
-                                        new mapboxgl.LngLatBounds(latLngs[0], latLngs[0]));
-                                    map.fitBounds(bounds, { padding: 20 });
+                                    //     new mapboxgl.LngLatBounds(latLngs[0], latLngs[0]));
+                                    // map.fitBounds(bounds, { padding: 20 });
                                     centerPoint = { lng: polygonCenter[0], lat: polygonCenter[1] };
                                     polygonPoints = latLngs;
 
@@ -495,6 +514,7 @@
 
         // Re-enable map click event
         mapCLickEvent = true;
+        map.setZoom(11.15);
     }
     function getLocationDetails(coordinates) {
         $.ajax({
@@ -759,5 +779,25 @@
                 console.error('Error:', error);
             });
                 }
+    function IsPointInsidePolygon(point, vertices) {
+       
+        const x = point[0]
+        const y = point[1]
+
+        let inside = false
+        for (let i = 0, j = vertices.length - 1; i < vertices.length; j = i++) {
+            const xi = vertices[i][0],
+                yi = vertices[i][1]
+            const xj = vertices[j][0],
+                yj = vertices[j][1]
+
+            const intersect = yi > y != yj > y && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi
+            if (intersect) inside = !inside
+        }
+
+        return inside
+    }
+
+   
     </script>
 

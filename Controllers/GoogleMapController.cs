@@ -183,5 +183,50 @@ namespace GoogleMap.Controllers
         {
             return (a.Lat - o.Lat) * (b.Lng - o.Lng) - (a.Lng - o.Lng) * (b.Lat - o.Lat);
         }
+
+        public async Task<IActionResult> CheckPOintInPOlygonOrNot(double latitude, double longitude)
+        {
+            var point = new Point(longitude, latitude) { SRID = 4326 };
+
+            // Retrieve all polygons from the database, including their points
+            List<PolygonCenter> allPolygons = await _dBcontext.PolygonCenters.AsNoTracking().Include(p => p.PolygonPoints).ToListAsync();
+
+            foreach (var polygon in allPolygons)
+            {
+                // Compute convex hull of the polygon points
+                if(polygon.PolygonPoints.Any() && polygon.PolygonPoints.First().Lat == polygon.PolygonPoints.Last().Lat && polygon.PolygonPoints.First().Lng == polygon.PolygonPoints.Last().Lng){
+                    var lastPoints = polygon.PolygonPoints.Last();
+                    polygon.PolygonPoints.Remove(lastPoints);   
+                }
+                List<PolygonPoint> convexHullPoints = ComputeConvexHull(polygon.PolygonPoints.ToList());
+
+                // Sort the convex hull points by longitude and latitude to ensure correct order
+                //convexHullPoints.Sort((p1, p2) => p1.Lng.CompareTo(p2.Lng) != 0 ? p1.Lng.CompareTo(p2.Lng) : p1.Lat.CompareTo(p2.Lat));
+
+                // Add the first point again at the end to close the polygon
+                convexHullPoints.Add(convexHullPoints.First());
+
+                // Convert PolygonPoints to NetTopologySuite Coordinate objects
+                var polygonCoords = convexHullPoints.Select(p => new Coordinate(p.Lng, p.Lat)).ToArray();
+                var geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
+                var ntsPolygon = geometryFactory.CreatePolygon(polygonCoords);
+
+                if (ntsPolygon.Contains(point))
+                {
+
+                    MatchingPolygon polygonDto = new MatchingPolygon
+                    {
+                        Id = polygon.Id,
+                        Address = $"{polygon.UserAddress},{polygon.FormatedAddress}",
+                        CenterCode = polygon.CenterCode,
+                        PolygonPoints = polygon.PolygonPoints.Select(pp => new LocationModel { Lat = pp.Lat, Lng = pp.Lng }).ToList()
+                    };
+
+                    return new JsonResult(new { isFound = true, result = polygonDto });
+                }
+            }
+
+            return Json(new { isFound = false });
+        }
     }
 }
