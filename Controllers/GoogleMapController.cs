@@ -25,6 +25,10 @@ namespace GoogleMap.Controllers
         {
             return View();
         }
+        public IActionResult SearchBox()
+        {
+            return View();
+        }
         public IActionResult MarkBuilding()
         {
             return View();

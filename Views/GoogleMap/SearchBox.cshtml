@@ -1,0 +1,111 @@
+﻿<!DOCTYPE html>
+<html>
+<head>
+    <title>Google Maps API Example</title>
+    <style>
+        #map {
+            height: 400px;
+            width: 100%;
+        }
+
+        #pac-input {
+            margin-top: 10px;
+            padding: 5px;
+        }
+    </style>
+</head>
+<body>
+    <input id="pac-input" type="text" placeholder="Enter a location">
+    <div id="map"></div>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbwLbPr5g35t-qKXhysIw2V9WUQBYae18&libraries=places,drawing"></script>
+    <script>
+        function initMap() {
+            // Create the map centered at a default location
+            var map = new google.maps.Map(document.getElementById('map'), {
+                center: { lat: -34.397, lng: 150.644 },
+                zoom: 8
+            });
+
+            // Create the search box and link it to the UI element
+            var input = document.getElementById('pac-input');
+            var searchBox = new google.maps.places.SearchBox(input);
+
+            // Bias the SearchBox results towards current map's viewport
+            map.addListener('bounds_changed', function () {
+                searchBox.setBounds(map.getBounds());
+            });
+
+            var markers = [];
+            var placePolygon;
+
+            // Listen for the event fired when the user selects a prediction and retrieve
+            // more details for that place
+            searchBox.addListener('places_changed', function () {
+                var places = searchBox.getPlaces();
+
+                if (places.length == 0) {
+                    return;
+                }
+                
+
+                // Clear out the old markers
+                markers.forEach(function (marker) {
+                    marker.setMap(null);
+                });
+                markers = [];
+
+                // Clear out the old polygon
+                if (placePolygon) {
+                    placePolygon.setMap(null);
+                }
+
+                // For each place, get the icon, name and location
+                var bounds = new google.maps.LatLngBounds();
+                places.forEach(function (place) {
+                    if (!place.geometry) {
+                        console.log("Returned place contains no geometry");
+                        return;
+                    }
+
+                    // Create a marker for each place
+                    markers.push(new google.maps.Marker({
+                        map: map,
+                        title: place.name,
+                        position: place.geometry.location
+                    }));
+
+                    if (place.geometry.viewport) {
+                        // Only geocodes have viewport
+                        bounds.union(place.geometry.viewport);
+                    } else {
+                        bounds.extend(place.geometry.location);
+                    }
+
+                    // Highlight the place area
+                    placePolygon = new google.maps.Polygon({
+                        paths: place.geometry.viewport ? [
+                            place.geometry.viewport.getNorthEast(),
+                            new google.maps.LatLng(place.geometry.viewport.getNorthEast().lat(), place.geometry.viewport.getSouthWest().lng()),
+                            place.geometry.viewport.getSouthWest(),
+                            new google.maps.LatLng(place.geometry.viewport.getSouthWest().lat(), place.geometry.viewport.getNorthEast().lng())
+                        ] : [
+                            place.geometry.location
+                        ],
+                        strokeColor: '#FF0000',
+                        strokeOpacity: 0.8,
+                        strokeWeight: 2,
+                        fillColor: '#FF0000',
+                        fillOpacity: 0.35
+                    });
+                    placePolygon.setMap(map);
+                });
+                map.fitBounds(bounds);
+            });
+        }
+
+        // Load the map
+        google.maps.event.addDomListener(window, 'load', initMap);
+    </script>
+
+</body>
+</html>

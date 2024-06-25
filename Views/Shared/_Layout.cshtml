@@ -4,91 +4,109 @@
 <html lang="en">
 <head>
     <meta charset="utf-8" />
-    <title>Mapbox Integration</title>
-
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Area Detector</title>
+    <link rel="stylesheet" href="~/lib/bootstrap/dist/css/bootstrap.min.css">
     <script src='https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.js'></script>
     <link href='https://api.mapbox.com/mapbox-gl-js/v2.9.1/mapbox-gl.css' rel='stylesheet' />
     <script src="https://cdn.jsdelivr.net/npm/turf@7.0.0-alpha.1/dist/turf.min.js"></script>
     <script src="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.min.js"></script>
-    
     <link rel="stylesheet" href="https://api.mapbox.com/mapbox-gl-js/plugins/mapbox-gl-geocoder/v5.0.0/mapbox-gl-geocoder.css" type="text/css">
- 
+
     <style>
         body {
             margin: 0;
             padding: 0;
         }
 
+        .wrapper {
+            display: flex;
+            width: 100%;
+            align-items: stretch;
+        }
 
-       
-      
+        #sidebar {
+            width: 250px;
+            background: #f8f9fa;
+            position: absolute;
+            left: -250px;
+            top: 0;
+            height: 100%;
+            transition: all 0.3s;
+            z-index: 999;
+        }
+
+            #sidebar.active {
+                left: 0;
+            }
+
+            #sidebar .list-unstyled {
+                padding: 20px 0;
+            }
+
+                #sidebar .list-unstyled a {
+                    padding: 10px;
+                    font-size: 1.1em;
+                    display: block;
+                    color: blue;
+                }
+
+        #content {
+            width: 100%;
+            padding: 20px;
+            transition: all 0.3s;
+            margin-left: 50px; /* Ensure some space when sidebar is collapsed */
+        }
+
+            #content.active {
+                margin-left: 300px; /* Adjust margin to fit expanded sidebar */
+            }
+
+        #sidebarCollapse {
+            width: 40px;
+            height: 40px;
+            background: #f8f9fa;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            cursor: pointer;
+            position: fixed;
+            top: 20px;
+            left: 20px;
+            z-index: 1000; /* Ensure the button is above the sidebar */
+        }
     </style>
-    
 </head>
 <body>
-    <header>
-        <nav class="navbar navbar-expand-sm navbar-toggleable-sm navbar-light bg-white border-bottom box-shadow mb-3">
-            <div class="container-fluid">
-              @*   <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="CreateArea">Create Location</a> *@
-              <div>
-                   @*  <a class="" asp-area="" asp-controller="Home" asp-action="Map">MapBox Area Save</a> *@
-                    <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="Index">Search Location</a>
-              </div>
-              <div>
-                    @* <a class="" asp-area="" asp-controller="Home" asp-action="Index">MapBox Area Search</a> *@
-                    <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="CreateArea">Create Location</a>
-              </div>
-             
-              
-               @*  <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="MapInsert">GoogleMap</a>
-                <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Map">GoogleMap</a> *@
-               
-                <div class="navbar-collapse collapse d-sm-inline-flex justify-content-between">
-                    <ul class="navbar-nav flex-grow-1">
-                     @*    <li class="nav-item">
-                            <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Map">Map</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="MapInsert">Map insert</a>
-                        </li> 
-                        <li class="nav-item">
-                            <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Map">MapBox Area Save</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="navbar-brand" asp-area="" asp-controller="Home" asp-action="Index">MapBox Area Search</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="Index">Search Location</a>
-                        </li>
-
-                        <li class="nav-item">
-                            <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="CreateArea">Create Location</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="MarkArea"> Location Marking</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="MarkBuilding"> Building Marking</a>
-                        </li>
-                        <li class="nav-item">
-                            <a class="navbar-brand" asp-area="" asp-controller="OpenStreetMap" asp-action="Index">OpenStreet Map</a>
-                        </li>*@
-
-                    </ul>
-                </div> 
+    <div class="wrapper">
+        <nav id="sidebar" class="bg-white border-right" style="margin-top:50px;">
+            <div class="list-unstyled">
+                <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="Index">Search Location</a>
+                <a class="navbar-brand" asp-area="" asp-controller="GoogleMap" asp-action="CreateArea">Create Location</a>
             </div>
         </nav>
-    </header>
-    <div class="container">
-        <main role="main" class="pb-3">
-            @RenderBody()
-        </main>
-     
+
+        <div id="content" class="content">
+            <div id="sidebarCollapse">
+                <span>&#9776;</span>
+            </div>
+            <main role="main" class="pb-3">
+                @RenderBody()
+            </main>
+        </div>
     </div>
 
     <script src="~/lib/jquery/dist/jquery.min.js"></script>
     <script src="~/lib/bootstrap/dist/js/bootstrap.bundle.min.js"></script>
     <script src="~/js/site.js" asp-append-version="true"></script>
+    <script>
+        $(document).ready(function () {
+            $('#sidebarCollapse').on('click', function () {
+                $('#sidebar').toggleClass('active');
+                $('#content').toggleClass('active');
+            });
+        });
+    </script>
     @await RenderSectionAsync("Scripts", required: false)
 </body>
 </html>
