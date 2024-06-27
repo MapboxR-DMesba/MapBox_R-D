@@ -13,6 +13,7 @@ namespace GoogleMap.DBModels
         public string UserAddress { get; set; }
         public int NUmberOfPoints { get; set; }
         public  string CenterCode { get; set; }
+        public string CountryCode { get; set; } 
         public ICollection<PolygonPoint> PolygonPoints { get; set; }
     }
 }

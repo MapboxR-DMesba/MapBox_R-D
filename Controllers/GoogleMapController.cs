@@ -3,6 +3,7 @@ using GoogleMap.DBModels;
 using GoogleMap.Models;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
+using Microsoft.VisualBasic;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.Geometries.Prepared;
 
@@ -44,13 +45,17 @@ namespace GoogleMap.Controllers
         [HttpPost]
         public async Task<IActionResult> SavePolygon(PolygonModel polygon)
         {
+            string shortCode = MyLast(polygon.ShortCode,2);
+            shortCode+= MyLast(polygon.UserInput , 2 );
+            shortCode += GenerateRandomPassword();
             PolygonCenter polygonCenter = new PolygonCenter();
             polygonCenter.Lat = polygon.Center.Lat;
             polygonCenter.Lng = polygon.Center.Lng;
             polygonCenter.FormatedAddress = polygon.FormattedAddress;
             polygonCenter.UserAddress = polygon.UserInput;
             polygonCenter.NUmberOfPoints = polygon.Points.Count;
-            polygonCenter.CenterCode = Guid.NewGuid().ToString();
+            polygonCenter.CenterCode = shortCode;
+            polygonCenter.CountryCode = MyLast(polygon.CountryCode,2);
 
             await _dBcontext.PolygonCenters.AddAsync(polygonCenter);
             await _dBcontext.SaveChangesAsync();
@@ -74,7 +79,7 @@ namespace GoogleMap.Controllers
             // You'll need to implement this logic
             // You can access polygon.center, polygon.points, polygon.userInput, polygon.formattedAddress here
             // Return appropriate response
-            return Ok();
+            return Ok(polygonCenter.CenterCode);
         }
 
         public async Task<IActionResult> GetPolygonByCordinate(double latitude, double longitude)
@@ -231,6 +236,101 @@ namespace GoogleMap.Controllers
             }
 
             return Json(new { isFound = false });
+        }
+        public async Task<IActionResult> GetPolygonCode(double latitude, double longitude)
+        {
+            var point = new Point(longitude, latitude) { SRID = 4326 };
+
+            // Retrieve all polygons from the database, including their points
+            List<PolygonCenter> allPolygons = await _dBcontext.PolygonCenters.AsNoTracking().Include(p => p.PolygonPoints).ToListAsync();
+
+            foreach (var polygon in allPolygons)
+            {
+                // Compute convex hull of the polygon points
+                if (polygon.PolygonPoints.Any() && polygon.PolygonPoints.First().Lat == polygon.PolygonPoints.Last().Lat && polygon.PolygonPoints.First().Lng == polygon.PolygonPoints.Last().Lng)
+                {
+                    var lastPoints = polygon.PolygonPoints.Last();
+                    polygon.PolygonPoints.Remove(lastPoints);
+                }
+                List<PolygonPoint> convexHullPoints = ComputeConvexHull(polygon.PolygonPoints.ToList());
+
+                // Sort the convex hull points by longitude and latitude to ensure correct order
+                //convexHullPoints.Sort((p1, p2) => p1.Lng.CompareTo(p2.Lng) != 0 ? p1.Lng.CompareTo(p2.Lng) : p1.Lat.CompareTo(p2.Lat));
+
+                // Add the first point again at the end to close the polygon
+                convexHullPoints.Add(convexHullPoints.First());
+
+                // Convert PolygonPoints to NetTopologySuite Coordinate objects
+                var polygonCoords = convexHullPoints.Select(p => new Coordinate(p.Lng, p.Lat)).ToArray();
+                var geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
+                var ntsPolygon = geometryFactory.CreatePolygon(polygonCoords);
+
+                if (ntsPolygon.Contains(point))
+                {
+
+                   
+
+                    return new JsonResult(new { code = $"{polygon.CenterCode}-{polygon.UserAddress}-{polygon.CountryCode}-{latitude},{longitude}" });
+                }
+            }
+
+            return new JsonResult(new { code = $"{latitude},{longitude}" });
+        }
+        public async Task<IActionResult> GetSugeestedItem(string searchText)
+        {
+          
+
+            // Retrieve all polygons from the database, including their points
+            List<PolygonCenter> suggestedItem = await _dBcontext.PolygonCenters.AsNoTracking().Where(x => x.CenterCode.StartsWith(searchText) || x.UserAddress.StartsWith(searchText)).Take(10).ToListAsync();
+
+
+            return Json(new { items = suggestedItem });
+        }
+        public  string MyLast(string str, int length)
+        {
+            if (str == null)
+                return "00";
+            else if (str.Length >= length)
+                return str.Substring(0, length);
+            else
+                return str;
+        }
+        public static string GenerateRandomPassword()
+        {
+            Random random = new Random();
+            string password = "";
+
+            // Generate one random number (digit)
+            password += random.Next(0, 10);
+
+            // Generate one random uppercase letter (ASCII 65-90)
+            password += (char)random.Next(65, 91);
+
+            // Generate one random lowercase letter (ASCII 97-122)
+            password += (char)random.Next(97, 123);
+
+            // Shuffle the characters randomly to mix them up
+            password = ShuffleString(password);
+
+            return password;
+        }
+
+        public static string ShuffleString(string str)
+        {
+            char[] array = str.ToCharArray();
+            Random random = new Random();
+            int n = array.Length;
+
+            while (n > 1)
+            {
+                n--;
+                int k = random.Next(n + 1);
+                char value = array[k];
+                array[k] = array[n];
+                array[n] = value;
+            }
+
+            return new string(array);
         }
     }
 }

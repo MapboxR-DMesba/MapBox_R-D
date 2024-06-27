@@ -4,17 +4,64 @@
         flex-grow: 1;
         height: 100%;
     }
+
+    .search-container {
+        position: relative;
+        width: 100%;
+        max-width: 400px;
+        margin-top: 20px;
+    }
+
+    #searchInput {
+        border-radius: 0 0 0 0;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        padding: 10px 20px;
+        width: 100%;
+        border: 1px solid #ccc;
+        font-size: 16px;
+        outline: none;
+        transition: box-shadow 0.2s;
+    }
+
+        #searchInput:focus {
+            box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+    .suggestions {
+        position: absolute;
+        width: 100%;
+        border: 1px solid #ccc;
+        border-top: none;
+        border-radius: 0 0 0 0 ;
+        box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+        background-color: white;
+        z-index: 1000;
+        display: none;
+    }
+
+    .suggestion-item {
+        padding: 10px;
+        cursor: pointer;
+    }
+
+        .suggestion-item:hover {
+            background-color: #f0f0f0;
+        }
+
+   
 </style>
 <html>
 <body>
 
     <h1> Map Search</h1>
-    <div id="locationDetails" style="margin-top:20px;"></div>
-    <div id="locationCode" style="margin-top:20px;"></div>
-    <div style="margin-top:20px;" class="d-inline-flex">
-        <input type="text" id="searchInput" placeholder="search by address">
-        <button id="searchBtn" class="btn btn-primary" onclick="searchLocationDetails()">Search</button>
-    </div >
+    <div id="locationDetails" style="margin-top:20px; display:none"></div>
+    <div id="locationCode" style="margin-top:20px;display:none"></div>
+    <div class="d-flex justify-content-left">
+        <div class="search-container">
+            <input type="text" id="searchInput" class="form-control" placeholder="Search by address" oninput="showSuggestions(this.value)" onkeydown="handleKeyDown(event)">
+            <div id="suggestions" class="suggestions"></div>
+        </div>
+    </div>
     
     <div id="googleMap" style="width:100%;height:600px;margin-top:20px;"></div>
     
@@ -44,7 +91,8 @@
                     google.maps.event.addListener(map, 'click', function (event) {
                         var clickedLocation = event.latLng;
                         placeMarker(clickedLocation);
-                        displayLocationDetails(clickedLocation);
+                        openInfoOnMarker(clickedLocation.lat(), clickedLocation.lng());
+                        //displayLocationDetails(clickedLocation);
                      //   markArea(clickedLocation);
                     });
 
@@ -66,7 +114,35 @@
             marker = new google.maps.Marker({
                 position: location,
                 map: map
-            });
+            }); 
+          
+           
+           
+        }
+        function openInfoOnMarker( lat, lng){
+            if (marker) {
+                fetch(`/GoogleMap/GetPolygonCode?latitude=${lat}&longitude=${lng}`)
+                    .then(response => response.json())
+                    .then(data => {
+                        // Create an info window with the desired text
+                        var infoWindow = new google.maps.InfoWindow({
+                            content: `${data.code}`
+                        });
+
+                        // Open the info window when the marker is clicked
+                        marker.addListener('click', function () {
+                            infoWindow.open(map, marker);
+                        });
+
+                        // Open the info window immediately after placing the marker
+                        infoWindow.open(map, marker);
+                    })
+                    .catch(error => {
+                        console.error('Error:', error)
+                        return;
+                    });
+            }
+         
         }
         function displayLocationDetails(location) {
             var geocoder = new google.maps.Geocoder();
@@ -93,7 +169,12 @@
             } else {
                 alert('Please click on the map to select a location first.');
             }
-        } 
+        }
+        function handleKeyDown(event) {
+            if (event.key === 'Enter') {
+                searchLocationDetails();
+            }
+        }
         function searchLocationDetails() {
             const searchInput = document.getElementById('searchInput').value;
             if (searchInput == null || searchInput == '') {
@@ -114,14 +195,17 @@
                             console.log("matching addresss:", data)
                             document.getElementById("locationDetails").innerHTML = "Address: " + data.result.address;
                             document.getElementById("locationCode").innerHTML = "Code is: " + data.result.centerCode;
-                            marker = new google.maps.Marker({
-                            position: { lat: data.result.lat, lng: data.result .lng}
-,
-                            map: map
-                        });
+                        placeMarker({ lat: data.result.lat, lng: data.result.lng });
+                        openInfoOnMarker(data.result.lat, data.result.lng);
+//                             marker = new google.maps.Marker({
+//                             position: { lat: data.result.lat, lng: data.result.lng}
+// ,
+//                             map: map
+//                         });
 
                         var newCenter = { lat: data.result.lat, lng: data.result.lng };
                         map.setCenter(newCenter);
+                        map.setZoom(17);
                         // Add markers and polygon
                         addMarkersAndPolygon(data.result.polygonPoints);
                        
@@ -214,7 +298,12 @@
                 fillOpacity: 0.35
             });
             polygon.setMap(map);
-        }
+            google.maps.event.addListener(polygon, 'click', function (event) {
+                var clickedLocation = event.latLng;
+                placeMarker(clickedLocation);
+                openInfoOnMarker(clickedLocation.lat(), clickedLocation.lng());
+            });
+                }
 
         function clearMarkers() {
             markers.forEach(function (marker) {
@@ -228,6 +317,48 @@
                 polygon.setMap(null);
                 polygon = null;
             }
+        }
+
+      
+
+        function showSuggestions(value) {
+            const suggestionsDiv = document.getElementById('suggestions');
+            suggestionsDiv.innerHTML = '';
+            if (value.length === 0) {
+                suggestionsDiv.style.display = 'none';
+                return;
+            }
+            fetch(`/GoogleMap/GetSugeestedItem?searchText=${value}`)
+                .then(response => response.json())
+                .then(data => {
+                  
+                        // Clear existing marker
+                       console.log("suggested items:",data)
+                        //alert(`The clicked location is inside a polygon. Center: (${data.result.centerLat}, ${data.result.centerLng})`);
+                        if (data.items.length > 0) {
+                            data.items.forEach(item => {
+                                const suggestionItem = document.createElement('div');
+                                suggestionItem.classList.add('suggestion-item');
+                            suggestionItem.textContent = `${item.centerCode},${item.userAddress},${item.countryCode},${item.formatedAddress}`;
+                                suggestionItem.onclick = () => {
+                                document.getElementById('searchInput').value = item.centerCode;
+                                    suggestionsDiv.style.display = 'none';
+                                    searchLocationDetails();
+                                };
+                                suggestionsDiv.appendChild(suggestionItem);
+                            });
+
+                            suggestionsDiv.style.display = 'block';
+                        } else {
+                            suggestionsDiv.style.display = 'none';
+                            return;
+                        }
+                      
+
+                    
+                })
+                .catch(error => console.error('Error:', error));
+          
         }
     </script>
 

@@ -58,20 +58,48 @@
             border: 1px solid #ccc;
             border-radius: 4px;
         }
+          /* Centering the loader */
+  .loader-container {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    z-index: 9999;
+    /* Adjust loader size and style */
+    text-align: center;
+  }
+  
+  .loader {
+    border: 8px solid red; /* Light gray border */
+    border-top: 8px solid green; /* Blue border for animation */
+    border-radius: 50%;
+    width: 60px;
+    height: 60px;
+    animation: spin 1s linear infinite; /* Animation for rotation */
+  }
+    @@keyframes spin {
+    0% { transform: rotate(0deg); }
+    100% { transform: rotate(360deg); }
+  }
+ 
 </style>
 <html>
   
 <body>
 
     <h1>Map Create area</h1>
+    <div class="loader-container" id="loader" style="display:none;">
+        <div class="loader"></div>
+    </div>
     <div id="container">
     <div id="controls">
- 
+            <input type="text" id="shortCode" readonly style="display:none">
+            <input type="text" id="countryCode" readonly style="display:none">
         <div id="form" style="display:none;">
             <div class="form-group">
                 <label for="formattedAddress">Formatted Address</label>
-                <input type="text" id="formattedAddress" readonly>
-            </div>
+                    <input type="text" id="formattedAddress" readonly>
+                </div>
             <div class="form-group">
                 <label for="userInput">User Input</label>
                 <input type="text" id="userInput">
@@ -159,12 +187,32 @@
             geocoder.geocode({ 'location': center }, function (results, status) {
                 if (status === 'OK') {
                     if (results[0]) {
+                        let shortcode = '';
+                        let countryCode = '';
+                        if (results[0].address_components.length == 1) {
+                            shortcode = results[0].address_components[0].short_name;
+
+                        }
+                        let countrydetails = results[0].address_components.find(item => item.types.includes('country'));
+                        if (countrydetails) {
+                            countryCode = countrydetails.short_name;
+                            shortcode += countryCode;
+                        } else {
+                            countryCode = '';
+                        }
+                      
                         document.getElementById('formattedAddress').value = results[0].formatted_address;
+                        document.getElementById('shortCode').value = shortcode;
+                        document.getElementById('countryCode').value = countryCode;
                     } else {
                         document.getElementById('formattedAddress').value = 'No results found';
+                        document.getElementById('shortCode').value = '';
                     }
                 } else {
                     document.getElementById('formattedAddress').value = 'Geocoder failed: ' + status;
+                    document.getElementById('shortCode').value = '';
+
+                    document.getElementById('userInput').value = '';
                 }
             });
         }
@@ -259,17 +307,22 @@
         }
         function saveData() {
             const userInput = document.getElementById('userInput').value;
+            let shortCode = document.getElementById('shortCode').value;
+            let countryCode = document.getElementById('countryCode').value;
             if (userInput == null || userInput == '') {
                 alert("please enter an address");
                 return;
             }
-
+            $('#loader').css('display', 'block');
             const formattedAddress = document.getElementById('formattedAddress').value;
             const polygondata = {
                 Center: { Lat: centerPoint.lat, Lng: centerPoint.lng },
                 Points: sortedPoints.map(point => ({ Lat: point.lat, Lng: point.lng })),
                 UserInput: userInput,
-                FormattedAddress: formattedAddress
+                FormattedAddress: formattedAddress,
+                ShortCode : shortCode,
+                CountryCode : countryCode
+
             };
             $.ajax({
                 url: '@Url.Action("SavePolygon", "GoogleMap")',
@@ -278,10 +331,13 @@
                 data: polygondata,
                 success: function (response) {
                     resetMap();
+                    $('#loader').css('display', 'none');
+                    alert("successfully addedd area. Area Code is: " + response)
                 },
                 error: function (xhr, status, error) {
                     // Handle error response
-                    console.error('Error: ' + error);
+                    $('#loader').css('display', 'none');
+                    alert('Error: ' + error);
                 }
             });
             // fetch('https://localhost:5001/api/polygons', {
@@ -317,7 +373,9 @@
             clickedPoints = [];
             sortedPoints = [];
             centerPoint = null;
-
+            document.getElementById('formattedAddress').value = '';
+            document.getElementById('shortCode').value = '';
+            document.getElementById('userInput').value = '';
             document.getElementById('saveBtn').style.display = 'none';
             document.getElementById('resetBtn').style.display = 'none';
             document.getElementById('form').style.display = 'none';
@@ -330,6 +388,6 @@
     </script>
 
     <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbwLbPr5g35t-qKXhysIw2V9WUQBYae18&callback=myMap"></script>
-
+   
 </body>
 </html>
