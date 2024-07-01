@@ -5,6 +5,13 @@
         height: 100%;
     }
 
+    .direction-container{
+        position: relative;
+        width: 100%;
+        max-width: 400px;
+        margin-top: 20px;
+        margin-left:5px;
+    }
     .search-container {
         position: relative;
         width: 100%;
@@ -48,7 +55,56 @@
             background-color: #f0f0f0;
         }
 
-   
+    #directionsPanel {
+        margin-top: 10px;
+        background-color: #fff;
+        padding: 10px;
+    }
+
+    .distance-label {
+        background: white;
+        border: 1px solid black;
+        padding: 2px;
+        font-size: 12px;
+    }
+
+    .compass-container {
+      
+        
+        position: relative;
+        width: 100%;
+        max-width: 400px;
+        margin-top: 20px;
+        margin-left: 5px;
+    }
+
+    .compass {
+        width: 40px;
+        height: 40px;
+        background-image: url('/images/compass.jpg'); /* Replace with your compass image */
+        background-size: contain;
+        background-repeat: no-repeat;
+        transition: transform 0.3s ease;
+        position: relative;
+    }
+
+    .compass-label {
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        font-size: 12px;
+        font-weight: bold;
+        color: black;
+    }
+
+    .compass-label-n {
+        top: -20px; /* Adjust positioning */
+    }
+
+    .compass-label-s {
+        bottom: -20px; /* Adjust positioning */
+    }
 </style>
 <html>
 <body>
@@ -60,10 +116,21 @@
         <div class="search-container">
             <input type="text" id="searchInput" class="form-control" placeholder="Search by address" oninput="showSuggestions(this.value)" onkeydown="handleKeyDown(event)">
             <div id="suggestions" class="suggestions"></div>
+        </div><div class="direction-container">
+            <button class="btn btn-primary" onclick="calculateRoute()">Get Directions</button>
         </div>
+        <div class="compass-container" style="display:none">
+            <div class="compass" id="compass">
+                <div class="compass-label compass-label-n">N</div>
+                <div class="compass-label compass-label-s">S</div>
+            </div>
+        </div>
+        
+
     </div>
-    
+   @*  <button onclick="calculateRoute()">Get Directions</button> *@
     <div id="googleMap" style="width:100%;height:600px;margin-top:20px;"></div>
+    <div id="directionsPanel" style="display:none"></div>
     
 
     <script>
@@ -71,7 +138,13 @@
         var marker;
         let polygon;
         let markers = [];
+        let currentLocationMarker
         let centerMarker;
+        let directionsService;
+        let directionsRenderer;
+        let trafficLayer;
+        let distanceLabel;
+        let compass;
         function myMap() {
             // Use HTML5 Geolocation API to get the user's current position
             if (navigator.geolocation) {
@@ -83,10 +156,28 @@
                         zoom: 15, // Adjust zoom level as needed
                     };
                     map = new google.maps.Map(document.getElementById("googleMap"), mapProp);
-
+                    if (currentLocationMarker) {
+                        currentLocationMarker.setMap(null);
+                    }
+                     currentLocationMarker = new google.maps.Marker({
+                        position: userLocation,
+                        map: map
+                    });
                     // Add a marker at the user's current location
-                 
+                    directionsService = new google.maps.DirectionsService();
+                    directionsRenderer = new google.maps.DirectionsRenderer({
+                        map: map,
+                        panel: document.getElementById('directionsPanel'),
+                        polylineOptions: {
+                            strokeColor: 'blue',
+                            strokeOpacity: 0.6,
+                            strokeWeight: 10
+                        }
+                    });
 
+                    trafficLayer = new google.maps.TrafficLayer();
+                    trafficLayer.setMap(map);
+                    window.addEventListener('deviceorientation', handleOrientation);
                     // Add a click event listener to the map
                     google.maps.event.addListener(map, 'click', function (event) {
                         var clickedLocation = event.latLng;
@@ -95,7 +186,15 @@
                         //displayLocationDetails(clickedLocation);
                      //   markArea(clickedLocation);
                     });
+                    // Initialize compass
+                    compass = document.getElementById('compass');
+                    updateCompass(map.getHeading());
 
+                    // Listen to map events
+               
+                google.maps.event.addListener(map, 'heading_changed', function (event) {
+                    updateCompass(map.getHeading());
+                });
                     // Display details of the user's current location
                     displayLocationDetails(userLocation);
                 }, function () {
@@ -119,6 +218,109 @@
            
            
         }
+
+        function handleOrientation(event) {
+            const alpha = event.alpha || 0; // Rotation around the Z-axis
+            const beta = event.beta || 0; // Rotation around the X-axis (-180 to 180)
+            const gamma = event.gamma || 0; // Rotation around the Y-axis (-90 to 90)
+
+            // Calculate rotation based on device orientation
+            const rotation = 360 - alpha;
+
+            // Update compass rotation
+            updateCompass(rotation);
+        }
+
+        function updateCompass(heading) {
+            compass.style.transform = `rotate(${heading}deg)`;
+        }
+        function calculateRoute() {
+            if (!marker ) {
+                alert('search destination or mark destination.');
+                return;
+            }
+
+            const start = marker.getPosition();
+            const end = currentLocationMarker.getPosition();
+
+            const request = {
+                origin: start,
+                destination: end,
+                travelMode: google.maps.TravelMode.DRIVING,
+                drivingOptions: {
+                    departureTime: new Date(Date.now()), // for the time when the user clicks on the button
+                    trafficModel: 'bestguess'
+                }
+            };
+
+            directionsService.route(request, (result, status) => {
+                if (status === google.maps.DirectionsStatus.OK) {
+                    directionsRenderer.setDirections(result);
+
+                    const route = result.routes[0];
+                    const legs = route.legs;
+                    let totalDistance = 0;
+                    let totalDuration = 0;
+                    let polylinePath = [];
+
+                    for (let i = 0; i < legs.length; i++) {
+                        totalDistance += legs[i].distance.value;
+                        totalDuration += legs[i].duration.value;
+                        const steps = legs[i].steps;
+
+                        for (let j = 0; j < steps.length; j++) {
+                            const step = steps[j];
+                            polylinePath.push(...google.maps.geometry.encoding.decodePath(step.polyline.points));
+
+                            if (step.traffic_speed_entry && step.traffic_speed_entry.length > 0) {
+                                step.polyline.strokeColor = getTrafficColor(step.traffic_speed_entry[0].traffic_condition);
+                            }
+                        }
+                    }
+
+                    totalDistance = totalDistance / 1000; // Convert to kilometers
+                    totalDuration = totalDuration / 60; // Convert to minutes
+
+                    if (distanceLabel) {
+                        distanceLabel.setMap(null);
+                    }
+
+                    const midpoint = polylinePath[Math.floor(polylinePath.length / 2)];
+                    distanceLabel = new google.maps.Marker({
+                        position: midpoint,
+                        map: map,
+                        label: {
+                            text: `${totalDistance.toFixed(2)} km`,
+                            color: 'red',
+                            fontSize: '24px',
+                            fontWeight: 'bold'
+                        },
+                        icon: {
+                            path: google.maps.SymbolPath.CIRCLE,
+                            scale: 0
+                        }
+                    });
+
+                    //alert(`Total distance: ${totalDistance.toFixed(2)} km\nTotal duration: ${totalDuration.toFixed(2)} mins`);
+                } else {
+                    alert('Could not calculate route: ' + status);
+                }
+            });
+        }
+
+        function getTrafficColor(trafficCondition) {
+            switch (trafficCondition) {
+                case 'UNKNOWN_CONDITION':
+                case 'NORMAL':
+                    return 'blue';
+                case 'SLOW':
+                case 'TRAFFIC_JAM':
+                    return 'red';
+                default:
+                    return 'blue';
+            }
+        }
+
         function openInfoOnMarker( lat, lng){
             if (marker) {
                 fetch(`/GoogleMap/GetPolygonCode?latitude=${lat}&longitude=${lng}`)
@@ -362,7 +564,7 @@
         }
     </script>
 
-    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbwLbPr5g35t-qKXhysIw2V9WUQBYae18&callback=myMap"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDbwLbPr5g35t-qKXhysIw2V9WUQBYae18&libraries=places&callback=myMap"></script>
 
 </body>
 </html>

@@ -6,6 +6,7 @@ using Microsoft.EntityFrameworkCore;
 using Microsoft.VisualBasic;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.Geometries.Prepared;
+using System.Linq;
 
 namespace GoogleMap.Controllers
 {
@@ -122,6 +123,52 @@ namespace GoogleMap.Controllers
 
             return Json(new { success = false });
         }
+        [HttpPost]
+        public async Task<IActionResult> CheckExisting(List<PolygonPoint> points)
+        {
+            List<PolygonPoint> inputPoints = ComputeConvexHull(points.ToList());
+
+            // Sort the convex hull points by longitude and latitude to ensure correct order
+            //convexHullPoints.Sort((p1, p2) => p1.Lng.CompareTo(p2.Lng) != 0 ? p1.Lng.CompareTo(p2.Lng) : p1.Lat.CompareTo(p2.Lat));
+
+            // Add the first point again at the end to close the polygon
+            inputPoints.Add(inputPoints.First());
+
+            // Convert PolygonPoints to NetTopologySuite Coordinate objects
+            var inputpolygonCoords = inputPoints.Select(p => new Coordinate(p.Lng, p.Lat)).ToArray();
+            var inputgeometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
+            var inputntsPolygon = inputgeometryFactory.CreatePolygon(inputpolygonCoords);
+
+            // Retrieve all polygons from the database, including their points
+            List<PolygonCenter> allPolygons = await _dBcontext.PolygonCenters.AsNoTracking().Include(p => p.PolygonPoints).ToListAsync();
+
+            foreach (var polygon in allPolygons)
+            {
+                // Compute convex hull of the polygon points
+                List<PolygonPoint> convexHullPoints = ComputeConvexHull(polygon.PolygonPoints.ToList());
+
+                // Sort the convex hull points by longitude and latitude to ensure correct order
+                //convexHullPoints.Sort((p1, p2) => p1.Lng.CompareTo(p2.Lng) != 0 ? p1.Lng.CompareTo(p2.Lng) : p1.Lat.CompareTo(p2.Lat));
+
+                // Add the first point again at the end to close the polygon
+                convexHullPoints.Add(convexHullPoints.First());
+
+                // Convert PolygonPoints to NetTopologySuite Coordinate objects
+                var polygonCoords = convexHullPoints.Select(p => new Coordinate(p.Lng, p.Lat)).ToArray();
+                var geometryFactory = new GeometryFactory(new PrecisionModel(), 4326);
+                var ntsPolygon = geometryFactory.CreatePolygon(polygonCoords);
+
+                if (ntsPolygon.Intersects(inputntsPolygon))
+                {
+
+                   
+
+                    return new JsonResult(new { success = true,existingCode= polygon.CenterCode});
+                }
+            }
+
+            return Json(new { success = false });
+        }
 
         public async Task<IActionResult> GEtPolygonByAddress(string address)
         {
@@ -155,44 +202,65 @@ namespace GoogleMap.Controllers
 
             return sortedCoordinates;
         }
-        private List<PolygonPoint> ComputeConvexHull(List<PolygonPoint> points)
-        {
-            points.Sort((p1, p2) => p1.Lng.CompareTo(p2.Lng) != 0 ? p1.Lng.CompareTo(p2.Lng) : p1.Lat.CompareTo(p2.Lat));
+        //private List<PolygonPoint> ComputeConvexHull(List<PolygonPoint> points)
+        //{
+        //    points.Sort((p1, p2) => p1.Lng.CompareTo(p2.Lng) != 0 ? p1.Lng.CompareTo(p2.Lng) : p1.Lat.CompareTo(p2.Lat));
 
-            List<PolygonPoint> lower = new List<PolygonPoint>();
-            foreach (var point in points)
-            {
-                while (lower.Count >= 2 && CrossProduct(lower[lower.Count - 2], lower[lower.Count - 1], point) <= 0)
-                {
-                    lower.RemoveAt(lower.Count - 1);
-                }
-                lower.Add(point);
-            }
+        //    List<PolygonPoint> lower = new List<PolygonPoint>();
+        //    foreach (var point in points)
+        //    {
+        //        while (lower.Count >= 2 && CrossProduct(lower[lower.Count - 2], lower[lower.Count - 1], point) <= 0)
+        //        {
+        //            lower.RemoveAt(lower.Count - 1);
+        //        }
+        //        lower.Add(point);
+        //    }
 
-            List<PolygonPoint> upper = new List<PolygonPoint>();
-            for (int i = points.Count - 1; i >= 0; i--)
-            {
-                var point = points[i];
-                while (upper.Count >= 2 && CrossProduct(upper[upper.Count - 2], upper[upper.Count - 1], point) <= 0)
-                {
-                    upper.RemoveAt(upper.Count - 1);
-                }
-                upper.Add(point);
-            }
+        //    List<PolygonPoint> upper = new List<PolygonPoint>();
+        //    for (int i = points.Count - 1; i >= 0; i--)
+        //    {
+        //        var point = points[i];
+        //        while (upper.Count >= 2 && CrossProduct(upper[upper.Count - 2], upper[upper.Count - 1], point) <= 0)
+        //        {
+        //            upper.RemoveAt(upper.Count - 1);
+        //        }
+        //        upper.Add(point);
+        //    }
 
-            upper.RemoveAt(upper.Count - 1);
-            lower.RemoveAt(lower.Count - 1);
-            lower.AddRange(upper);
+        //    upper.RemoveAt(upper.Count - 1);
+        //    lower.RemoveAt(lower.Count - 1);
+        //    lower.AddRange(upper);
 
-            return lower;
-        }
+        //    return lower;
+        //}
 
         // Helper method to calculate cross product of vectors
         private double CrossProduct(PolygonPoint o, PolygonPoint a, PolygonPoint b)
         {
             return (a.Lat - o.Lat) * (b.Lng - o.Lng) - (a.Lng - o.Lng) * (b.Lat - o.Lat);
         }
+        public List<PolygonPoint> ComputeConvexHull(List<PolygonPoint> points)
+        {
+            // Calculate the centroid of the points
+            var centroid = CalculateCentroid(points);
 
+            // Sort points by angle relative to the centroid
+            points.Sort((p1, p2) => CalculateAngle(p1, centroid).CompareTo(CalculateAngle(p2, centroid)));
+
+            return points;
+        }
+
+        private PolygonPoint CalculateCentroid(List<PolygonPoint> points)
+        {
+            double centroidLat = points.Average(p => p.Lat);
+            double centroidLng = points.Average(p => p.Lng);
+            return new PolygonPoint { Lat = centroidLat, Lng = centroidLng };
+        }
+
+        private double CalculateAngle(PolygonPoint point, PolygonPoint centroid)
+        {
+            return Math.Atan2(point.Lat - centroid.Lat, point.Lng - centroid.Lng);
+        }
         public async Task<IActionResult> CheckPOintInPOlygonOrNot(double latitude, double longitude)
         {
             var point = new Point(longitude, latitude) { SRID = 4326 };
@@ -270,7 +338,7 @@ namespace GoogleMap.Controllers
 
                    
 
-                    return new JsonResult(new { code = $"{polygon.CenterCode}-{polygon.UserAddress}-{polygon.CountryCode}-{latitude},{longitude}" });
+                    return new JsonResult(new { code = $"{polygon.CenterCode}-{polygon.UserAddress}" });
                 }
             }
 
@@ -311,6 +379,20 @@ namespace GoogleMap.Controllers
 
             // Shuffle the characters randomly to mix them up
             password = ShuffleString(password);
+            DateTime now = DateTime.Now;
+            int day = now.Day;
+            int month = now.Month;
+            int year = now.Year;
+            int hour = now.Hour;
+            int minute = now.Minute;
+            int second = now.Second;
+
+            // Calculate the sum of the date and time components
+            int sum = day + month + year + hour + minute + second;
+
+            // Convert the sum to a 2-digit string (modulus 100 to ensure it's within 2 digits)
+            string sumAsTwoDigits = (sum % 100).ToString("D2");
+            password+= sumAsTwoDigits;
 
             return password;
         }

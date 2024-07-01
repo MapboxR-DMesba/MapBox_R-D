@@ -126,13 +126,15 @@
             if (navigator.geolocation) {
                 navigator.geolocation.getCurrentPosition(function (position) {
                     var userLocation = new google.maps.LatLng(position.coords.latitude, position.coords.longitude);
-
+                   
                     var mapProp = {
                         center: userLocation,
                         zoom: 15, // Adjust zoom level as needed
                     };
                     map = new google.maps.Map(document.getElementById("googleMap"), mapProp);
                     geocoder = new google.maps.Geocoder();
+
+                    
                     // Add a click event listener to the map
                     google.maps.event.addListener(map, 'click', function (event) {
                         var clickedLocation = event.latLng;
@@ -174,11 +176,39 @@
             }
 
             drawPolygon();
-            centerPoint = calculateCenter();
-            displayAddress(centerPoint);
-            document.getElementById('saveBtn').style.display = 'block';
-            document.getElementById('resetBtn').style.display = 'block';
-            document.getElementById('form').style.display = 'block';
+            const polygondata = {
+                
+                Points: sortedPoints.map(point => ({ Lat: point.lat, Lng: point.lng }))
+
+            };
+            $('#loader').css('display', 'block');
+            $.ajax({
+                url: '@Url.Action("CheckExisting", "GoogleMap")',
+                type: 'POST',
+                // contentType: 'application/json',
+                data: polygondata,
+                success: function (response) {
+                    if (response.success == true) {
+                        $('#loader').css('display', 'none');
+                        alert(`this polygon contains existing polygon points. Coded is ${response.existingCode} ;`)
+                        resetMap();
+                        return;
+                    }else{
+                        $('#loader').css('display', 'none');
+                        centerPoint = calculateCenter();
+                        displayAddress(centerPoint);
+                        document.getElementById('saveBtn').style.display = 'block';
+                        document.getElementById('resetBtn').style.display = 'block';
+                        document.getElementById('form').style.display = 'block';
+                    }
+                },
+                error: function (xhr, status, error) {
+                    // Handle error response
+                    $('#loader').css('display', 'none');
+                    alert('Error: ' + error);
+                }
+            });
+           
 
             // Disable map click event
             google.maps.event.clearListeners(map, 'click');
@@ -231,7 +261,8 @@
         function drawPolygon() {
             // Create a new polygon with the clicked points
        sortedPoints = getConvexHull(clickedPoints);
-
+            console.log("polygonpoints:", clickedPoints);
+            console.log("sortedPoints:", sortedPoints);
             polygon = new google.maps.Polygon({
                 paths: sortedPoints,
                 fillColor: '#FF0000',
@@ -248,30 +279,81 @@
         }
         function getConvexHull(points) {
            
-            points.sort((a, b) => a.lng() - b.lng() || a.lat() - b.lat());
+            // points.sort((a, b) => a.lng() - b.lng() || a.lat() - b.lat());
+           
+            // const cross = (o, a, b) => (a.lat() - o.lat()) * (b.lng() - o.lng()) - (a.lng() - o.lng()) * (b.lat() - o.lat());
 
-            const cross = (o, a, b) => (a.lat() - o.lat()) * (b.lng() - o.lng()) - (a.lng() - o.lng()) * (b.lat() - o.lat());
+            // let lower = [];
+            // for (let point of points) {
+            //     while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) {
+            //         lower.pop();
+            //     }
+            //     lower.push(point);
+            // }
 
-            let lower = [];
-            for (let point of points) {
-                while (lower.length >= 2 && cross(lower[lower.length - 2], lower[lower.length - 1], point) <= 0) {
-                    lower.pop();
-                }
-                lower.push(point);
-            }
+            // let upper = [];
+            // for (let point of points.reverse()) {
+            //     while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) {
+            //         upper.pop();
+            //     }
+            //     upper.push(point);
+            // }
 
-            let upper = [];
-            for (let point of points.reverse()) {
-                while (upper.length >= 2 && cross(upper[upper.length - 2], upper[upper.length - 1], point) <= 0) {
-                    upper.pop();
-                }
-                upper.push(point);
-            }
+            // upper.pop();
+            // lower.pop();
+            // return lower.concat(upper);
 
-            upper.pop();
-            lower.pop();
-            return lower.concat(upper);
+            // let hull = [];
+            // let pointOnHull = points.reduce((leftmost, point) => point.lng() < leftmost.lng() ? point : leftmost, points[0]);
+
+            // let i = 0;
+            // do {
+            //     hull[i] = pointOnHull;
+            //     let endpoint = points[0];
+            //     for (let j = 1; j < points.length; j++) {
+            //         if (endpoint === pointOnHull || isLeftTurn(hull[i], endpoint, points[j])) {
+            //             endpoint = points[j];
+            //         }
+            //     }
+            //     i++;
+            //     pointOnHull = endpoint;
+            // } while (pointOnHull !== hull[0]);
+
+            // return hull;
+            let centroid = calculateCentroid(points);
+
+            // Sort points by angle relative to the centroid
+            points.sort((a, b) => calculateAngle(a, centroid) - calculateAngle(b, centroid));
+            return points;
+
+
         }
+        function isLeftTurn(p, q, r) {
+            return (q.lng() - p.lng()) * (r.lat() - p.lat()) - (q.lat() - p.lat()) * (r.lng() - p.lng()) > 0;
+        }
+        // Function to calculate the centroid of the points
+        function calculateCentroid(points) {
+            let centroid = { lat: 0, lng: 0 };
+            points.forEach(point => {
+                centroid.lat += point.lat();
+                centroid.lng += point.lng();
+            });
+            centroid.lat /= points.length;
+            centroid.lng /= points.length;
+            return new google.maps.LatLng(centroid.lat, centroid.lng);
+        }
+
+        // Function to calculate the angle between two points
+        function calculateAngle(point, centroid) {
+            return Math.atan2(point.lat() - centroid.lat(), point.lng() - centroid.lng());
+        }
+
+
+
+
+
+
+
 
         function calculateCenter() {
             let latSum = 0;
